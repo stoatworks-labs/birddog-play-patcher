@@ -182,6 +182,17 @@ async function init() {
     els.kvmRow.classList.add('disabled');
     els.kvmRow.title = 'bdkvm-linux-arm64 was not present when assets were built';
   }
+
+  // ?demo=1 fills in an obviously-fake key and builds, so screenshots and video
+  // are of the real tool doing real work rather than an empty form. It never
+  // downloads — the visitor still has to ask for the file.
+  if (new URLSearchParams(location.search).has('demo')) {
+    els.key.value =
+      'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyForTheDemoOnly you@laptop';
+    els.optKvm.checked = !!manifest.bdkvm;
+    els.tag.value = 'demo';
+    build();
+  }
 }
 
 init();
