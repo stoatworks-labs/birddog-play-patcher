@@ -18,6 +18,14 @@ The package is assembled entirely in your browser. Nothing is uploaded, no accou
 and **you do not need your existing firmware file** — the generated package is a standalone
 overlay installer, not a modified copy of BirdDog's firmware.
 
+[![Watch it building a package — 46 seconds](docs/video-thumb.png)](https://www.youtube.com/watch?v=z7RWEk11Egc)
+
+*46 seconds at the live address, driven through the tool's own controls. The Tailscale
+release really is fetched and checked against its published SHA-256 during the take, and
+the 34.9 MB package at the end was assembled in the tab.*
+
+![The generator, mid-build](docs/screenshot.png)
+
 ---
 
 ## Why no upload, and no decryption
