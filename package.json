@@ -1,0 +1,17 @@
+{
+  "name": "birddog-play-patcher",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Builds an installable firmware package for a BirdDog PLAY entirely in the browser",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "assets": "scripts/build-assets.sh",
+    "dev": "scripts/build-assets.sh && wrangler dev --port 8792",
+    "test": "scripts/build-assets.sh && node test/build-package.mjs",
+    "deploy": "scripts/build-assets.sh && wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.116.0"
+  }
+}

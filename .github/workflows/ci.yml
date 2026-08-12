@@ -1,0 +1,68 @@
+name: ci
+
+# The page has no build step, so CI's job is to prove the archive writer still
+# produces a package a real tar can read, and that what it ships matches what is
+# committed in installer/.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  birddog-play-patcher:
+    name: birddog-play-patcher
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+
+      - name: Assemble assets
+        run: scripts/build-assets.sh
+
+      - name: Build a package and check its structure
+        run: node test/build-package.mjs
+
+      # public/fw.js agreeing with itself proves nothing — GNU tar and Python's
+      # strict tarfile are the independent readers.
+      - name: GNU tar must accept the package
+        run: tar tzvf test/out/BirdDog_PLAY-custom-citest.fw
+
+      - name: Python tarfile must accept it, with root ownership and exec bits
+        run: |
+          python3 - <<'PY'
+          import tarfile, sys
+          t = tarfile.open('test/out/BirdDog_PLAY-custom-citest.fw')
+          members = {m.name: m for m in t.getmembers()}
+          bad = []
+          for name, m in members.items():
+              if m.uid or m.gid or m.uname != 'root' or m.gname != 'root':
+                  bad.append(f'{name}: owned by {m.uname}:{m.gname} ({m.uid}:{m.gid})')
+          for name in ('./update', './probe.sh'):
+              if oct(members[name].mode) != '0o755':
+                  bad.append(f'{name}: mode {oct(members[name].mode)}, expected 0o755')
+          if oct(members['./authorized_keys'].mode) != '0o600':
+              bad.append('./authorized_keys is not 0600')
+          if bad:
+              print('\n'.join(bad)); sys.exit(1)
+          print(f'{len(members)} members, all root-owned with the expected modes')
+          PY
+
+      - name: Extracted installer must be byte-identical to installer/update
+        run: |
+          mkdir -p /tmp/x
+          tar xzf test/out/BirdDog_PLAY-custom-citest.fw -C /tmp/x
+          cmp /tmp/x/update installer/update
+          cmp /tmp/x/probe.sh installer/probe.sh
+          cmp /tmp/x/userdata/birddog-kvm/run.sh installer/kvm-run.sh
+
+      # Syntax only. The payload runs as root on someone's device, so a parse
+      # error must never reach a release; deeper linting is a separate concern
+      # and belongs upstream where the installer is developed.
+      - name: Shell payload must parse
+        run: |
+          for f in installer/update installer/probe.sh installer/kvm-run.sh scripts/*.sh; do
+            bash -n "$f" && echo "ok  $f"
+          done

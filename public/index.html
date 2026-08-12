@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>BirdDog PLAY firmware package generator</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fbfaf8;      --panel: #fff;     --ink: #1c1b1a;   --dim: #6b6864;
+    --line: #e3e0da;    --accent: #b4541f; --ok: #2c6e49;    --warn: #8a6100;
+    --err: #a32b1c;     --code: #f3f1ec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #171614;    --panel: #1f1e1c;  --ink: #e9e6e0;   --dim: #9c968d;
+      --line: #322f2b;  --accent: #e08a55; --ok: #6fbf8f;    --warn: #d9ad4f;
+      --err: #e8776a;   --code: #171614;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2.5rem 1.25rem 5rem; background: var(--bg); color: var(--ink);
+    font: 15px/1.6 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 46rem; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin: 0 0 .25rem; letter-spacing: -.01em; }
+  h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .09em;
+       color: var(--dim); margin: 2rem 0 .75rem; font-weight: 600; }
+  p { margin: .5rem 0; }
+  .sub { color: var(--dim); margin-bottom: 1.5rem; }
+  code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85em; }
+  code { background: var(--code); padding: .1em .35em; border-radius: 3px; }
+  a { color: var(--accent); }
+
+  .panel { background: var(--panel); border: 1px solid var(--line);
+           border-radius: 10px; padding: 1.25rem; }
+  .banner { border-left: 3px solid var(--warn); background: var(--panel);
+            border-radius: 0 8px 8px 0; padding: .85rem 1rem; margin-bottom: 1.5rem; }
+  .banner strong { color: var(--warn); }
+
+  label.field { display: block; font-weight: 600; margin-bottom: .3rem; }
+  textarea, input[type=text] {
+    width: 100%; padding: .6rem .7rem; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg); color: var(--ink);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .82rem;
+  }
+  textarea { resize: vertical; min-height: 4.5rem; }
+  textarea.bad, input.bad { border-color: var(--err); }
+  .hint { color: var(--dim); font-size: .82rem; margin: .35rem 0 1.1rem; }
+
+  .opt { display: flex; gap: .7rem; align-items: flex-start; padding: .6rem 0;
+         border-top: 1px solid var(--line); }
+  .opt:first-of-type { border-top: 0; }
+  .opt input { margin-top: .35rem; flex: none; }
+  .opt .t { font-weight: 600; }
+  .opt .d { color: var(--dim); font-size: .85rem; }
+  .opt.disabled { opacity: .5; }
+
+  .row { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; margin-top: 1.25rem; }
+  button {
+    font: inherit; font-weight: 600; padding: .55rem 1.1rem; border-radius: 6px;
+    border: 1px solid transparent; background: var(--accent); color: #fff; cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+  input[type=file] { font-size: .82rem; color: var(--dim); max-width: 100%; }
+
+  #log { background: var(--code); border: 1px solid var(--line); border-radius: 8px;
+         padding: .8rem; margin-top: 1.25rem; max-height: 17rem; overflow: auto;
+         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+         font-size: .78rem; line-height: 1.7; }
+  #log:empty { display: none; }
+  .line { white-space: pre-wrap; word-break: break-word; }
+  .line.ok { color: var(--ok); } .line.warn { color: var(--warn); } .line.err { color: var(--err); }
+
+  #result { margin-top: 1rem; border: 1px solid var(--line); border-radius: 8px; padding: .85rem 1rem; }
+  #result dl { display: grid; grid-template-columns: auto 1fr; gap: .2rem .9rem; margin: 0; }
+  #result dt { color: var(--dim); font-size: .82rem; }
+  #result dd { margin: 0; word-break: break-all; font-family: ui-monospace, Menlo, monospace; font-size: .8rem; }
+
+  ol.steps { padding-left: 1.2rem; } ol.steps li { margin: .4rem 0; }
+  .note { color: var(--dim); font-size: .85rem; }
+  .note.err { color: var(--err); }
+  footer { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--line);
+           color: var(--dim); font-size: .82rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>BirdDog PLAY firmware package generator</h1>
+  <p class="sub">Builds an installable <code>.fw</code> carrying an SSH key, Tailscale and an
+     NDI KVM endpoint. Everything is assembled in this browser — nothing is uploaded, and no
+     existing firmware file is needed.</p>
+
+  <div class="banner">
+    <p><strong>Read this first.</strong> This package has been installed on a real PLAY: SSH,
+       Tailscale and the NDI KVM endpoint all confirmed working. That is one unit on firmware
+       1.0.30 — treat your first install as an experiment on a unit you can afford to have
+       offline.</p>
+    <p class="note">The installer refuses to run unless <code>/etc/birddog-hardware-version</code>
+       reads <code>BirdDog PLAY</code> or <code>BirdDog Pod</code>, never touches sshd,
+       <code>birddog-update-wrapper</code>, <code>BirdDogUpdateRunner</code> or the web UI,
+       and cannot reach the kernel or bootloader — those are not in this package format at all.</p>
+  </div>
+
+  <div class="panel">
+    <h2 style="margin-top:0">Access</h2>
+    <label class="field" for="key">SSH public key</label>
+    <textarea id="key" spellcheck="false" autocomplete="off"
+      placeholder="ssh-ed25519 AAAAC3Nza… you@host"></textarea>
+    <p class="hint" id="keyHint">Installed to <code>/root/.ssh/authorized_keys</code>.
+       SSH on the PLAY listens on port 9031.</p>
+
+    <h2>Payload</h2>
+    <div class="opt">
+      <input type="checkbox" id="optTailscale" checked>
+      <div>
+        <div class="t">Tailscale</div>
+        <div class="d">Current stable arm64 build into <code>/userdata/tailscale</code>, with a
+          systemd unit. <strong>No auth key is baked in</strong> — it would sit in cleartext in
+          the archive. SSH in afterwards and run <code>tailscale up</code>.
+          Stock firmware has no <code>/dev/net/tun</code> and ships no kernel modules at all, so
+          you get userspace-networking. Inbound still works — SSH, the web UI and the
+          <code>:8080</code> API are all reachable over the tailnet, measured at ~195 Mbps
+          against a 920 Mbps wired baseline. Enough for NDI|HX and SRT, not for full-bandwidth
+          NDI.</div>
+      </div>
+    </div>
+    <div class="opt" id="kvmRow">
+      <input type="checkbox" id="optKvm">
+      <div>
+        <div class="t">NDI KVM endpoint</div>
+        <div class="d">Installs <code>bdkvm</code> to <code>/userdata/bd-kvm</code> under its own
+          self-supervising unit, rather than behind BirdDog's 1.0.34-only hooks (which
+          <code>bdup.sh</code> deletes on every vendor update). Needs a USB keyboard or mouse
+          attached and an NDI source selected to do anything.</div>
+      </div>
+    </div>
+    <div class="opt">
+      <input type="checkbox" id="optReboot">
+      <div>
+        <div class="t">Reboot when finished</div>
+        <div class="d">Off by default. Without it the installer restarts
+          <code>BirdDogRunner</code> itself, so video comes back without a reboot.</div>
+      </div>
+    </div>
+
+    <h2>Build</h2>
+    <label class="field" for="tag">Build tag</label>
+    <input type="text" id="tag" value="web" spellcheck="false">
+    <p class="hint">Names the file and is logged on the device as the installed build.</p>
+
+    <label class="field" for="tsFile">Tailscale tarball (optional)</label>
+    <input type="file" id="tsFile" accept=".tgz,.gz,application/gzip">
+    <p class="hint">Leave empty to fetch the current stable arm64 release and verify it against
+       the published SHA-256. Supply <code>tailscale_&lt;version&gt;_arm64.tgz</code> yourself to
+       pin a version or build offline.</p>
+
+    <div class="row">
+      <button id="build">Build package</button>
+      <button id="download" class="ghost" hidden>Download .fw</button>
+    </div>
+
+    <div id="log"></div>
+
+    <div id="result" hidden>
+      <dl>
+        <dt>File</dt><dd id="resultName"></dd>
+        <dt>Size</dt><dd id="resultSize"></dd>
+        <dt>SHA-256</dt><dd id="resultSha"></dd>
+      </dl>
+    </div>
+  </div>
+
+  <h2>Installing it</h2>
+  <ol class="steps">
+    <li>Open the PLAY's web UI and upload the <code>.fw</code> on the firmware page, exactly as
+        you would a vendor release.</li>
+    <li>Read the first-boot report at <code>http://&lt;play-ip&gt;/static/bd-probe.txt</code> — it
+        works even if the SSH key did not take, and reports whether <code>/dev/net/tun</code>
+        exists, free space, and USB input topology.</li>
+    <li><code>ssh -p 9031 root@&lt;play-ip&gt;</code>, then
+        <code>/userdata/tailscale/tailscale --socket=/run/bd-tailscaled.sock up</code>.</li>
+    <li>Delete the probe report when you are done: <code>rm /srv/birddog-web-ui/static/bd-probe.txt</code>.</li>
+  </ol>
+
+  <h2>Before you put it on a tailnet</h2>
+  <p>The PLAY's REST API on <code>:8080</code> has <strong>no authentication of any kind</strong>
+     and sets <code>Access-Control-Allow-Origin: *</code>. Joining a tailnet does not change that —
+     anyone who can reach the device on the tailnet can reconfigure it without credentials. Scope
+     an ACL for this node; the device has no access control of its own to fall back on.</p>
+
+  <h2>Undoing it</h2>
+  <p class="mono">systemctl disable --now bd-tailscaled bd-kvm<br>
+     rm -rf /userdata/tailscale /userdata/bd-kvm /etc/systemd/system/bd-{tailscaled,kvm}.service</p>
+  <p class="note">Then reflash stock firmware if you want a clean unit. Recovery-mode flashing of
+     the factory image is a proven path, but it restores factory state — not this unit's
+     provisioned serial, hostname or <code>/userdata</code>.</p>
+
+  <footer>
+    <p id="payloadInfo" class="note">Loading build assets…</p>
+    <p>No firmware is uploaded and nothing is decrypted here: a valid package is simply a gzip'd
+       tar with an executable <code>update</code> at the top level, so the generator needs neither
+       your firmware file nor any vendor key. The only server-side component is a proxy for
+       <code>pkgs.tailscale.com</code>, which serves no CORS header.</p>
+    <p><strong>Read the installer before you run it.</strong> It runs as root on your device and
+       it is 200 lines of commented bash — you should not take anyone's word for what it does:
+       <a href="https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/installer/update">installer/update</a>.
+       Source for the whole tool, including the on-device KVM agent, is at
+       <a href="https://github.com/stoatworks-labs/birddog-play-patcher">github.com/stoatworks-labs/birddog-play-patcher</a>.</p>
+    <p>Not affiliated with or endorsed by BirdDog. Installing this will not do your warranty
+       any favours.</p>
+  </footer>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>

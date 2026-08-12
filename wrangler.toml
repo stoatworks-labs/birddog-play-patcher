@@ -1,0 +1,24 @@
+# Cloudflare deployment for the BirdDog PLAY Patcher.
+#
+# Static assets plus one small Worker. The page assembles the firmware package in
+# the browser, so there is no server-side work and no secret to bind: the Worker
+# exists only because pkgs.tailscale.com serves no Access-Control-Allow-Origin
+# header, which stops the browser fetching the Tailscale tarball itself.
+#
+# public/assets/ is generated and gitignored — run scripts/build-assets.sh before
+# deploying, or the page will load and then refuse to build.
+#
+# Deliberately NOT connected to a Cloudflare build. Deploys are local
+# (`cf-run npx wrangler deploy`), so pushing a branch cannot publish to
+# production — a trap that has bitten other repos in this fleet.
+
+name = "birddog-play-patcher"
+main = "src/worker.js"
+compatibility_date = "2026-08-12"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[observability]
+enabled = true

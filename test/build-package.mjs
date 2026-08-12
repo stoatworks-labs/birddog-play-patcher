@@ -1,0 +1,143 @@
+// Builds a package with the browser's own fw.js, outside a browser.
+//
+// The module under test is byte-identical to the one public/app.js imports — no
+// reimplementation — so `tar tzvf` on the result is real evidence about what the
+// generator produces rather than about a test double.
+//
+//   node test/build-package.mjs [outdir]
+//
+// Set TS_TGZ to a local tailscale_<ver>_arm64.tgz to test offline; otherwise the
+// current stable arm64 release is fetched, which also exercises the real
+// pkgs.tailscale.com integration end to end.
+//
+// Exits non-zero on any structural problem.
+
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve, join } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO = resolve(HERE, '..');
+const ASSETS = join(REPO, 'public/assets');
+const OUTDIR = process.argv[2] || join(HERE, 'out');
+
+const fw = await import(join(REPO, 'public/fw.js'));
+const { Tar, extractTailscale, sha256Hex, buildConf, validateKey, isArm64Elf, gunzip, parseTar } = fw;
+
+let failures = 0;
+const check = (ok, msg) => {
+  console.log(`${ok ? '  ok  ' : ' FAIL '} ${msg}`);
+  if (!ok) failures++;
+};
+
+/* -------------------------------------------------------------- unit checks */
+
+console.log('validateKey:');
+check(validateKey('') !== null, 'rejects empty');
+check(validateKey('-----BEGIN OPENSSH PRIVATE KEY-----') !== null, 'rejects a private key');
+check(validateKey('ssh-ed25519 AAAA\nssh-rsa BBBB') !== null, 'rejects two lines');
+check(validateKey('hello world') !== null, 'rejects junk');
+check(validateKey('ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA1b2c3d4e5f6g7h8i9j') === null,
+  'accepts ed25519 with no comment');
+check(validateKey('  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQ== user@host  ') === null,
+  'accepts rsa with comment and padding');
+
+/* ----------------------------------------------------------------- assemble */
+
+if (!existsSync(join(ASSETS, 'manifest.json'))) {
+  console.error('\nassets missing — run scripts/build-assets.sh first');
+  process.exit(1);
+}
+const manifest = JSON.parse(await readFile(join(ASSETS, 'manifest.json'), 'utf8'));
+
+console.log('\nassets match the manifest:');
+for (const [key, file] of [['update', 'update'], ['probe', 'probe.sh'], ['kvmRun', 'kvm-run.sh']]) {
+  const bytes = new Uint8Array(await readFile(join(ASSETS, file)));
+  check(await sha256Hex(bytes) === manifest[key].sha256, `${file}`);
+}
+
+console.log('\nthe shipped installer is the committed one:');
+for (const f of ['update', 'probe.sh', 'kvm-run.sh']) {
+  const a = await readFile(join(ASSETS, f));
+  const b = await readFile(join(REPO, 'installer', f));
+  check(Buffer.compare(a, b) === 0, `public/assets/${f} === installer/${f}`);
+}
+
+// The camera payload is not offered by the web generator, so the installer must
+// treat its absence as a no-op rather than an error.
+const updateSrc = await readFile(join(REPO, 'installer/update'), 'utf8');
+check(/WITH_CAM="\$\{WITH_CAM:-0\}"/.test(updateSrc), 'installer defaults WITH_CAM to 0');
+check(/if \[ "\$WITH_CAM" = 1 \] && \[ -d/.test(updateSrc),
+  'installer guards the camera block on both the flag and the directory');
+
+async function tailscaleTarball() {
+  if (process.env.TS_TGZ) {
+    console.log(`\ntailscale: using ${process.env.TS_TGZ}`);
+    return readFile(process.env.TS_TGZ);
+  }
+  console.log('\ntailscale: fetching current stable arm64 from pkgs.tailscale.com');
+  const idx = await (await fetch('https://pkgs.tailscale.com/stable/?mode=json')).json();
+  const file = idx.Tarballs.arm64;
+  const [tgz, sidecar] = await Promise.all([
+    fetch(`https://pkgs.tailscale.com/stable/${file}`).then((r) => r.arrayBuffer()),
+    fetch(`https://pkgs.tailscale.com/stable/${file}.sha256`).then((r) => r.text()),
+  ]);
+  const want = sidecar.trim().split(/\s+/)[0];
+  check(await sha256Hex(tgz) === want, `${file} matches its published .sha256`);
+  return tgz;
+}
+
+const tar = new Tar();
+tar.file('./update', new Uint8Array(await readFile(join(ASSETS, 'update'))), 0o755);
+tar.file('./probe.sh', new Uint8Array(await readFile(join(ASSETS, 'probe.sh'))), 0o755);
+tar.text('./authorized_keys',
+  'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYFORPACKAGEBUILDONLY test@example\n', 0o600);
+tar.text('./build.conf',
+  buildConf({ tag: 'citest', withTailscale: true, withKvm: true, doReboot: false }), 0o644);
+
+const bins = await extractTailscale(await tailscaleTarball());
+check(isArm64Elf(bins.tailscaled), 'tailscaled is an aarch64 ELF');
+check(isArm64Elf(bins.tailscale), 'tailscale is an aarch64 ELF');
+tar.file('./userdata/tailscale/tailscaled', bins.tailscaled, 0o755);
+tar.file('./userdata/tailscale/tailscale', bins.tailscale, 0o755);
+
+const bdkvm = new Uint8Array(await readFile(join(ASSETS, 'bdkvm-linux-arm64')));
+check(isArm64Elf(bdkvm), 'bdkvm is an aarch64 ELF');
+tar.file('./userdata/birddog-kvm/bdkvm', bdkvm, 0o755);
+tar.file('./userdata/birddog-kvm/run.sh',
+  new Uint8Array(await readFile(join(ASSETS, 'kvm-run.sh'))), 0o755);
+
+const blob = await tar.gzip();
+await mkdir(OUTDIR, { recursive: true });
+const out = join(OUTDIR, 'BirdDog_PLAY-custom-citest.fw');
+await writeFile(out, Buffer.from(await blob.arrayBuffer()));
+console.log(`\nwrote ${out} (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
+
+/* --------------------------------------------------- structural self-checks */
+
+const members = parseTar(await gunzip(await blob.arrayBuffer()));
+const byName = new Map(members.map((m) => [m.name, m]));
+
+console.log('\nstructure:');
+for (const n of [
+  './update', './probe.sh', './build.conf', './authorized_keys',
+  './userdata/tailscale/tailscaled', './userdata/tailscale/tailscale',
+  './userdata/birddog-kvm/bdkvm', './userdata/birddog-kvm/run.sh',
+]) {
+  check(byName.has(n), `contains ${n}`);
+}
+
+const updateMember = byName.get('./update');
+check(new TextDecoder().decode(updateMember.data.subarray(0, 11)) === '#!/bin/bash',
+  './update begins with a bash shebang');
+check(updateMember.data.length === manifest.update.size, './update survives the round trip intact');
+check(Buffer.compare(Buffer.from(updateMember.data), await readFile(join(REPO, 'installer/update'))) === 0,
+  './update in the package is byte-identical to installer/update');
+
+// Nothing derived from the vendor's encrypted payload may ever appear here.
+const all = Buffer.concat(members.map((m) => Buffer.from(m.data)));
+check(!all.includes('bdpff'), 'package contains no reference to the vendor payload');
+
+console.log(failures ? `\n${failures} FAILED` : '\nall checks passed');
+process.exit(failures ? 1 : 0);

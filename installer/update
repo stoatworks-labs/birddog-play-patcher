@@ -1,0 +1,248 @@
+#!/bin/bash
+# Custom BirdDog PLAY installer. Run as root by /bin/birddog-update-wrapper
+# with cwd set to the extracted package directory.
+#
+# Design rules (see notes/04):
+#   * Everything substantial lives in /userdata. The rootfs gets only a systemd
+#     unit, root's authorized_keys, and a probe report.
+#   * NOTHING on the recovery path is touched: sshd + sshd_config,
+#     birddog-update-wrapper, BirdDogUpdateRunner.service, birddog-web-ui.
+#   * Idempotent — safe to install repeatedly.
+#   * Never exits non-zero in a way that leaves services stopped.
+
+SDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SDIR" || exit 0
+
+# The stock updater provides this; fall back to echo so we work standalone too.
+type birddog-updater-log >/dev/null 2>&1 || birddog-updater-log() { echo "$@"; }
+
+log() { birddog-updater-log "[custom] $*"; echo "[custom] $*" >> /tmp/bd-custom-install.log; }
+
+# shellcheck disable=SC1091
+[ -f "$SDIR/build.conf" ] && . "$SDIR/build.conf"
+BUILD_TAG="${BUILD_TAG:-unknown}"
+WITH_TAILSCALE="${WITH_TAILSCALE:-0}"
+WITH_KVM="${WITH_KVM:-0}"
+WITH_CAM="${WITH_CAM:-0}"
+DO_REBOOT="${DO_REBOOT:-0}"
+
+log "installer starting, build ${BUILD_TAG}"
+
+# ---------------------------------------------------------------- guard rails
+HW_FILE=/etc/birddog-hardware-version
+HW="$(cat "$HW_FILE" 2>/dev/null | tr -d '\r\n')"
+case "$HW" in
+  "BirdDog PLAY"|"BirdDog Pod") log "hardware ID ok: $HW" ;;
+  *) log "REFUSING: unexpected hardware ID '${HW}' — this package is PLAY/Pod only"
+     exit 0 ;;
+esac
+
+# The rootfs is remounted ro on some failure paths; make sure we can write.
+if ! touch /etc/.bd-custom-rw-test 2>/dev/null; then
+  log "rootfs is read-only, attempting remount rw"
+  mount -o remount,rw /dev/root 2>/dev/null || log "WARNING: remount failed"
+fi
+rm -f /etc/.bd-custom-rw-test 2>/dev/null
+
+mkdir -p /userdata || { log "FATAL: no /userdata"; exit 0; }
+
+FREE_KB=$(df -Pk /userdata 2>/dev/null | awk 'NR==2{print $4}')
+log "/userdata free: ${FREE_KB:-unknown} KB"
+
+# ------------------------------------------------------------------- ssh key
+if [ -f "$SDIR/authorized_keys" ]; then
+  mkdir -p /root/.ssh
+  touch /root/.ssh/authorized_keys
+  KEY="$(cat "$SDIR/authorized_keys")"
+  if grep -qxF "$KEY" /root/.ssh/authorized_keys 2>/dev/null; then
+    log "ssh key already present"
+  else
+    printf '%s\n' "$KEY" >> /root/.ssh/authorized_keys
+    log "ssh key installed"
+  fi
+  # sshd is strict about these; the tar's ownership is not trusted.
+  chown -R root:root /root/.ssh
+  chmod 700 /root/.ssh
+  chmod 600 /root/.ssh/authorized_keys
+fi
+
+# ------------------------------------------------------------------ tailscale
+if [ "$WITH_TAILSCALE" = 1 ] && [ -d "$SDIR/userdata/tailscale" ]; then
+  NEED_KB=$(du -sk "$SDIR/userdata/tailscale" | awk '{print $1}')
+  if [ -n "$FREE_KB" ] && [ "$FREE_KB" -lt $((NEED_KB + 51200)) ]; then
+    log "SKIPPING tailscale: needs ${NEED_KB} KB + 50 MB headroom, only ${FREE_KB} KB free"
+  else
+    log "installing tailscale (${NEED_KB} KB)"
+    mkdir -p /userdata/tailscale /userdata/tailscale/state
+    cp -f "$SDIR/userdata/tailscale/tailscaled" /userdata/tailscale/ 2>/dev/null
+    cp -f "$SDIR/userdata/tailscale/tailscale"  /userdata/tailscale/ 2>/dev/null
+    chmod 755 /userdata/tailscale/tailscaled /userdata/tailscale/tailscale
+    chown root:root /userdata/tailscale/tailscaled /userdata/tailscale/tailscale
+
+    # /dev/net/tun decides whether we get a real interface or userspace mode.
+    if [ -c /dev/net/tun ]; then
+      TUNARG=""
+      log "/dev/net/tun present — full tun mode"
+    elif modprobe tun 2>/dev/null && [ -c /dev/net/tun ]; then
+      TUNARG=""
+      log "/dev/net/tun created via modprobe — full tun mode"
+    else
+      TUNARG="--tun=userspace-networking --socks5-server=localhost:1055 --outbound-http-proxy-listen=localhost:1055"
+      log "no /dev/net/tun — falling back to userspace-networking"
+    fi
+
+    cat > /etc/systemd/system/bd-tailscaled.service <<EOF
+[Unit]
+Description=Tailscale (custom, /userdata)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/userdata/tailscale/tailscaled --state=/userdata/tailscale/state/tailscaled.state --socket=/run/bd-tailscaled.sock ${TUNARG}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    log "tailscale unit written (tun args: '${TUNARG:-none}')"
+  fi
+fi
+
+# ------------------------------------------------------------------ kvm agent
+# We install to /userdata/bd-kvm and supervise it ourselves, deliberately NOT
+# /userdata/birddog-kvm behind BirdDog's hooks, because:
+#   1. Those hooks (birddog-kvm-manager, birddog-kvm-runner, BirdDogKVM.service,
+#      99-usb-detect-kvm.rules) are a 1.0.34 feature. VERIFIED ABSENT on a live
+#      1.0.30 unit, so relying on them means the agent silently never starts.
+#   2. bdup.sh does `rm -rf /userdata/birddog-kvm` on every vendor update, so
+#      anything installed there is deleted by the next firmware upgrade.
+# Being self-contained fixes both. bdkvm exits 0 when no kbd/mouse is present,
+# so Restart=always + RestartSec turns the unit into its own hotplug poller and
+# we need no udev rule at all.
+if [ "$WITH_KVM" = 1 ] && [ -d "$SDIR/userdata/birddog-kvm" ]; then
+  log "installing NDI KVM endpoint to /userdata/bd-kvm"
+  mkdir -p /userdata/bd-kvm
+  cp -f "$SDIR/userdata/birddog-kvm/bdkvm"  /userdata/bd-kvm/
+  cp -f "$SDIR/userdata/birddog-kvm/run.sh" /userdata/bd-kvm/
+  chmod 755 /userdata/bd-kvm/bdkvm /userdata/bd-kvm/run.sh
+  chown -R root:root /userdata/bd-kvm
+
+  cat > /etc/systemd/system/bd-kvm.service <<'EOF'
+[Unit]
+Description=BirdDog PLAY NDI KVM endpoint (custom)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/userdata/bd-kvm
+ExecStart=/userdata/bd-kvm/run.sh
+# bdkvm exits 0 when no input device is attached; restarting on a timer is how
+# hotplug is handled without a udev rule.
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  log "kvm unit written (self-supervising, no dependency on BirdDog's hooks)"
+fi
+
+# ------------------------------------------------------------------ bdcam
+# UVC camera -> NDI. Installs alongside bd-kvm and follows the same rules: all
+# of it under /userdata, self-supervised, no udev rule (bdcam exits 0 when no
+# camera is attached, so Restart=always is the hotplug poller).
+#
+# It uses the device's own libndi via dlopen — nothing NDI-derived is shipped in
+# this package, and the binary works against whichever of libndi.so.5/.6 is
+# present.
+if [ "$WITH_CAM" = 1 ] && [ -d "$SDIR/userdata/bd-cam" ]; then
+  log "installing bdcam (UVC -> NDI) to /userdata/bd-cam"
+  mkdir -p /userdata/bd-cam
+  cp -f "$SDIR/userdata/bd-cam/bdcam"  /userdata/bd-cam/
+  cp -f "$SDIR/userdata/bd-cam/run.sh" /userdata/bd-cam/
+  chmod 755 /userdata/bd-cam/bdcam /userdata/bd-cam/run.sh
+  chown -R root:root /userdata/bd-cam
+  # Preserve an existing config across reinstalls — it is how the device is
+  # tuned once it is out of reach.
+  if [ ! -f /userdata/bd-cam/bdcam.conf ] && [ -f "$SDIR/userdata/bd-cam/bdcam.conf" ]; then
+    cp -f "$SDIR/userdata/bd-cam/bdcam.conf" /userdata/bd-cam/
+  fi
+
+  cat > /etc/systemd/system/bd-cam.service <<'EOF'
+[Unit]
+Description=BirdDog PLAY UVC camera to NDI (custom)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/userdata/bd-cam
+ExecStart=/userdata/bd-cam/run.sh
+# bdcam exits 0 when no camera is attached; restarting on a timer is how
+# hotplug is handled without a udev rule.
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  log "bdcam unit written"
+fi
+
+# -------------------------------------------------------------------- rootfs
+if [ -d "$SDIR/files" ]; then
+  log "copying rootfs overlay"
+  cp -rf "$SDIR/files/." / 2>/dev/null
+fi
+
+# --------------------------------------------------------------------- probe
+if [ -f "$SDIR/probe.sh" ]; then
+  chmod +x "$SDIR/probe.sh"
+  "$SDIR/probe.sh" "$BUILD_TAG" || log "probe failed (non-fatal)"
+fi
+
+# -------------------------------------------------------------------- enable
+systemctl daemon-reload 2>/dev/null
+if [ -f /etc/systemd/system/bd-tailscaled.service ]; then
+  systemctl enable bd-tailscaled.service 2>/dev/null
+  systemctl restart bd-tailscaled.service 2>/dev/null && log "tailscaled started" \
+    || log "WARNING: tailscaled failed to start — check 'journalctl -u bd-tailscaled'"
+fi
+if [ -f /etc/systemd/system/bd-kvm.service ]; then
+  systemctl enable bd-kvm.service 2>/dev/null
+  systemctl restart bd-kvm.service 2>/dev/null && log "bd-kvm started" \
+    || log "WARNING: bd-kvm failed to start — check 'journalctl -u bd-kvm'"
+fi
+if [ -f /etc/systemd/system/bd-cam.service ]; then
+  systemctl enable bd-cam.service 2>/dev/null
+  systemctl restart bd-cam.service 2>/dev/null && log "bd-cam started" \
+    || log "WARNING: bd-cam failed to start — check 'journalctl -u bd-cam'"
+fi
+
+# --------------------------------------------------- restore stock services
+# /bin/birddog-update-wrapper does `systemctl stop BirdDogRunner` before calling
+# us, and only ever reboots via bdup.sh. We are not bdup.sh, so if we exit
+# without either rebooting or restarting it, the unit is left with PPApp dead:
+# no video, no OSD, just a dark HDMI output. Looks bricked; isn't.
+if [ "$DO_REBOOT" != 1 ]; then
+  if systemctl is-active --quiet BirdDogRunner 2>/dev/null; then
+    log "BirdDogRunner already running"
+  else
+    systemctl start BirdDogRunner 2>/dev/null \
+      && log "BirdDogRunner restarted (the wrapper had stopped it)" \
+      || log "WARNING: could not restart BirdDogRunner — reboot the unit"
+  fi
+fi
+
+sync; sync
+log "installer finished (build ${BUILD_TAG})"
+log "probe report: http://<this-device>/static/bd-probe.txt"
+log "tailscale is installed but NOT authenticated — ssh in on port 9031 and run:"
+log "  /userdata/tailscale/tailscale --socket=/run/bd-tailscaled.sock up"
+
+if [ "$DO_REBOOT" = 1 ]; then
+  log "rebooting"
+  /bin/birddog-reboot-request 2>/dev/null || reboot
+fi
+
+exit 0
