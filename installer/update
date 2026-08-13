@@ -189,7 +189,7 @@ ExecStart=/userdata/bd-cam/run.sh
 # bdcam actually took it. The marker makes that specific: without it this
 # would fire on every restart of a disabled service (every 10s below) and
 # would fight anyone who stopped BirdDogRunner deliberately.
-ExecStopPost=-/bin/sh -c '[ -e /run/bdcam-took-display ] && rm -f /run/bdcam-took-display && systemctl --no-block start BirdDogRunner'
+ExecStopPost=-/bin/sh -c 'if [ -e /run/bdcam-took-display ]; then rm -f /run/bdcam-took-display; systemctl --no-block start BirdDogRunner; fi'
 # bdcam exits 0 when no camera is attached; restarting on a timer is how
 # hotplug is handled without a udev rule.
 Restart=always

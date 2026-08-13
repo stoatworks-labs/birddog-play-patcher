@@ -57,6 +57,9 @@
   .opt .t { font-weight: 600; }
   .opt .d { color: var(--dim); font-size: .85rem; }
   .opt.disabled { opacity: .5; }
+  .beta { font-size: .68rem; font-weight: 700; text-transform: uppercase;
+          letter-spacing: .06em; color: var(--warn); border: 1px solid var(--warn);
+          border-radius: 3px; padding: .05em .35em; vertical-align: .12em; margin-left: .35rem; }
 
   .row { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; margin-top: 1.25rem; }
   button {
@@ -90,13 +93,15 @@
 <body>
 <main>
   <h1>BirdDog PLAY firmware package generator</h1>
-  <p class="sub">Builds an installable <code>.fw</code> carrying an SSH key, Tailscale and an
-     NDI KVM endpoint. Everything is assembled in this browser — nothing is uploaded, and no
-     existing firmware file is needed.</p>
+  <p class="sub">Builds an installable <code>.fw</code> carrying an SSH key, Tailscale, an
+     NDI KVM endpoint and a USB media player. Everything is assembled in this browser — nothing
+     is uploaded, and no existing firmware file is needed.</p>
 
   <div class="banner">
     <p><strong>Read this first.</strong> This package has been installed on a real PLAY: SSH,
-       Tailscale and the NDI KVM endpoint all confirmed working. That is one unit on firmware
+       Tailscale and the NDI KVM endpoint all confirmed working, and the USB media player
+       confirmed playing video, stills and PDFs — that one is <strong>beta</strong>, with its
+       rough edges listed against the option below. That is one unit on firmware
        1.0.30 — treat your first install as an experiment on a unit you can afford to have
        offline.</p>
     <p class="note">The installer refuses to run unless <code>/etc/birddog-hardware-version</code>
@@ -141,7 +146,7 @@
     <div class="opt" id="playRow">
       <input type="checkbox" id="optPlay">
       <div>
-        <div class="t">USB media player</div>
+        <div class="t">USB media player <span class="beta">beta</span></div>
         <div class="d">Adds a <strong>USB</strong> entry to the source dropdown and plays video,
           stills and PDFs off a USB stick, hardware-decoded straight to HDMI — in order or
           shuffled, looping until you stop it. Control it from that page, or from
@@ -151,6 +156,15 @@
           restores it. This is the only option here that edits a firmware file: it adds one
           <code>&lt;option&gt;</code> to <code>videoset.html</code>, keeps a pristine backup
           beside it, and <code>bdplay -unpatch-ui</code> restores it byte-for-byte.
+          <br>
+          <strong>Why beta:</strong> two known rough edges, both measured rather than guessed.
+          Repeatedly switching between USB and NDI destabilises BirdDog's own decoder — its
+          <code>birddog-runner</code> aborts during NDI teardown, and on the test unit that went
+          from 0 occurrences to 30 over an afternoon of switching. It restarts each time, and the
+          player clears a failed state and checks the decoder came back, but expect the odd
+          dropout if you flick between sources constantly; treat it as a mode you set. And
+          playback has been proven from internal storage and a loopback exFAT volume, but
+          <strong>not yet with a physical stick hotplugged</strong>.
           <br>
           <span id="playExtras"></span>
         </div>
