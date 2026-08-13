@@ -10,7 +10,7 @@
 
 Builds an installable `.fw` for a [BirdDog PLAY](https://birddog.tv) that adds an SSH key,
 [Tailscale](https://tailscale.com), an NDI KVM endpoint, and a
-[USB media player](https://github.com/stoatworks-labs/bdplay) — so a PLAY can be reached and
+[USB media player](https://github.com/stoatworks-labs/bd-play-usb-player) — so a PLAY can be reached and
 managed remotely, can drive the machine it is displaying, and can play video, stills and PDFs
 off a USB stick.
 

@@ -45,7 +45,7 @@ done
 
 # ------------------------------------------------------------------- bdplay
 # The USB media player. Unlike bdkvm, its SOURCE is not vendored here: bdplay
-# is its own public repo (github.com/stoatworks-labs/bdplay), so the page can
+# is its own public repo (github.com/stoatworks-labs/bd-play-usb-player), so the page can
 # link to it and there is no second copy to drift. Only the built binaries come
 # across, which is what build-assets.sh needs.
 #
@@ -53,7 +53,7 @@ done
 # would be distribution, and §13 reaches network users — and at 37 MB it
 # exceeds Cloudflare's 25 MiB per-file asset limit anyway. PDF here is PDFium
 # (BSD-3) via bdpdf. See bdplay's AGENTS.md.
-PLAY="${BDPLAY:-$HOME/Projects/bdplay}"
+PLAY="${BDPLAY:-$HOME/Projects/bd-play-usb-player}"
 if [ -d "$PLAY/dist" ]; then
   mkdir -p "$REPO/player/dist"
   for f in bdplay-linux-arm64 bdpdf-linux-arm64 libpdfium.so mount.exfat-fuse-linux-arm64; do
