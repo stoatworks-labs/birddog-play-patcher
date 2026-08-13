@@ -9,8 +9,10 @@
 > firmwares in the field.
 
 Builds an installable `.fw` for a [BirdDog PLAY](https://birddog.tv) that adds an SSH key,
-[Tailscale](https://tailscale.com), and an NDI KVM endpoint — so a PLAY can be reached and
-managed remotely, and can drive the machine it is displaying.
+[Tailscale](https://tailscale.com), an NDI KVM endpoint, and a
+[USB media player](https://github.com/stoatworks-labs/bdplay) — so a PLAY can be reached and
+managed remotely, can drive the machine it is displaying, and can play video, stills and PDFs
+off a USB stick.
 
 **Live: <https://birddog-play-patcher.stoatworks-labs.com>**
 

@@ -138,6 +138,24 @@
           attached and an NDI source selected to do anything.</div>
       </div>
     </div>
+    <div class="opt" id="playRow">
+      <input type="checkbox" id="optPlay">
+      <div>
+        <div class="t">USB media player</div>
+        <div class="d">Adds a <strong>USB</strong> entry to the source dropdown and plays video,
+          stills and PDFs off a USB stick, hardware-decoded straight to HDMI — in order or
+          shuffled, looping until you stop it. Control it from that page, or from
+          <code>http://&lt;play&gt;:8091/</code>.
+          <br>
+          Selecting USB stops BirdDog's decoder to take the display, and switching back to NDI
+          restores it. This is the only option here that edits a firmware file: it adds one
+          <code>&lt;option&gt;</code> to <code>videoset.html</code>, keeps a pristine backup
+          beside it, and <code>bdplay -unpatch-ui</code> restores it byte-for-byte.
+          <br>
+          <span id="playExtras"></span>
+        </div>
+      </div>
+    </div>
     <div class="opt">
       <input type="checkbox" id="optReboot">
       <div>
@@ -209,13 +227,28 @@
        it is 200 lines of commented bash — you should not take anyone's word for what it does:
        <a href="https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/installer/update">installer/update</a>.
        Source for the whole tool, including the on-device KVM agent, is at
-       <a href="https://github.com/stoatworks-labs/birddog-play-patcher">github.com/stoatworks-labs/birddog-play-patcher</a>.</p>
+       <a href="https://github.com/stoatworks-labs/birddog-play-patcher">github.com/stoatworks-labs/birddog-play-patcher</a>,
+       and the USB media player is at
+       <a href="https://github.com/stoatworks-labs/bdplay">github.com/stoatworks-labs/bdplay</a>.</p>
     <p>The package you download contains the official
        <a href="https://tailscale.com">Tailscale</a> arm64 binaries, redistributed unmodified
        under the <a href="https://github.com/tailscale/tailscale/blob/main/LICENSE">BSD-3-Clause
        licence</a>, © Tailscale Inc. &amp; AUTHORS. The KVM agent loads the device's existing
        NDI runtime at run time and redistributes none of it; NDI® is a registered trademark of
-       Vizrt Group. Full credits in
+       Vizrt Group.</p>
+    <p>Choosing the USB media player also redistributes two more unmodified upstream binaries.
+       <a href="https://pdfium.googlesource.com/pdfium/">PDFium</a> renders PDF pages, under the
+       <a href="https://pdfium.googlesource.com/pdfium/+/refs/heads/main/LICENSE">BSD-3-Clause
+       licence</a>, © The PDFium Authors; the build is
+       <a href="https://github.com/bblanchon/pdfium-binaries">bblanchon/pdfium-binaries</a>.
+       exFAT sticks are mounted by <a href="https://github.com/relan/exfat">fuse-exfat</a>
+       (<a href="https://github.com/relan/exfat/blob/master/COPYING">GPL v2</a>, © Andrew
+       Nayenko) linked against <a href="https://github.com/libfuse/libfuse">libfuse</a>
+       (LGPL v2.1). <strong>Both are copyleft, so their corresponding source is offered:</strong>
+       each is built unmodified from the upstream release by
+       <a href="https://github.com/stoatworks-labs/bdplay/blob/main/tools/build-exfat.sh">tools/build-exfat.sh</a>
+       and <a href="https://github.com/stoatworks-labs/bdplay/blob/main/bdpdf/build.sh">bdpdf/build.sh</a>,
+       which name the exact versions and flags used. Full credits in
        <a href="https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/ATTRIBUTIONS.md">ATTRIBUTIONS.md</a>.</p>
     <p>Not affiliated with or endorsed by BirdDog. Installing this will not do your warranty
        any favours.</p>

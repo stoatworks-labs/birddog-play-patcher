@@ -24,6 +24,8 @@ BUILD_TAG="${BUILD_TAG:-unknown}"
 WITH_TAILSCALE="${WITH_TAILSCALE:-0}"
 WITH_KVM="${WITH_KVM:-0}"
 WITH_CAM="${WITH_CAM:-0}"
+WITH_CAM_UI="${WITH_CAM_UI:-0}"
+WITH_PLAY="${WITH_PLAY:-0}"
 DO_REBOOT="${DO_REBOOT:-0}"
 
 log "installer starting, build ${BUILD_TAG}"
@@ -169,6 +171,9 @@ if [ "$WITH_CAM" = 1 ] && [ -d "$SDIR/userdata/bd-cam" ]; then
     cp -f "$SDIR/userdata/bd-cam/bdcam.conf" /userdata/bd-cam/
   fi
 
+  cp -f "$SDIR/userdata/bd-cam/api-run.sh" /userdata/bd-cam/api-run.sh 2>/dev/null
+  chmod 755 /userdata/bd-cam/api-run.sh 2>/dev/null
+
   cat > /etc/systemd/system/bd-cam.service <<'EOF'
 [Unit]
 Description=BirdDog PLAY UVC camera to NDI (custom)
@@ -178,6 +183,13 @@ Wants=network-online.target
 [Service]
 WorkingDirectory=/userdata/bd-cam
 ExecStart=/userdata/bd-cam/run.sh
+# HDMI output means taking DRM master from PPApp, so bdcam stops
+# BirdDogRunner and restarts it on the way out. That restore cannot run if
+# bdcam is killed outright, so put the display back here too -- but ONLY if
+# bdcam actually took it. The marker makes that specific: without it this
+# would fire on every restart of a disabled service (every 10s below) and
+# would fight anyone who stopped BirdDogRunner deliberately.
+ExecStopPost=-/bin/sh -c '[ -e /run/bdcam-took-display ] && rm -f /run/bdcam-took-display && systemctl --no-block start BirdDogRunner'
 # bdcam exits 0 when no camera is attached; restarting on a timer is how
 # hotplug is handled without a udev rule.
 Restart=always
@@ -187,6 +199,121 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
   log "bdcam unit written"
+
+  # The settings API is a separate unit from the streamer deliberately: the
+  # streamer exits when no camera is attached, and the settings page has to
+  # stay answerable regardless.
+  cat > /etc/systemd/system/bd-cam-api.service <<'EOF'
+[Unit]
+Description=BirdDog PLAY UVC converter settings API (custom)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/userdata/bd-cam
+ExecStart=/userdata/bd-cam/api-run.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  log "bdcam settings API unit written"
+fi
+
+# --------------------------------------------------- web UI "UVC Converter" tab
+# videoset.html is a Go template parsed by birddog-web-ui AT STARTUP, so a bad
+# edit does not bite until the restart below — and if the UI does not come back,
+# the firmware upload page goes with it. Hence the health check and automatic
+# rollback. The patch itself lives in bdcam, where it is unit tested, refuses
+# unfamiliar markup, and is exactly reversible.
+if [ "$WITH_CAM_UI" = 1 ] && [ -x /userdata/bd-cam/bdcam ]; then
+  # The unit is BirdDogWebUI, NOT "birddog-web-ui" (that is the binary name).
+  # Getting this wrong makes the restart a silent no-op and the health check
+  # below a false positive, because the old template stays parsed in memory.
+  WEBUI_UNIT=BirdDogWebUI
+  if ! systemctl cat "$WEBUI_UNIT" >/dev/null 2>&1; then
+    log "WARNING: no $WEBUI_UNIT unit on this firmware — skipping the web UI tab"
+  elif /userdata/bd-cam/bdcam --patch-ui /srv/birddog-web-ui >> /tmp/bd-custom-install.log 2>&1; then
+    PID_BEFORE=$(pidof birddog-web-ui 2>/dev/null | awk '{print $1}')
+    log "web UI patched; restarting $WEBUI_UNIT (was pid ${PID_BEFORE:-none})"
+    systemctl restart "$WEBUI_UNIT" 2>/dev/null
+    sleep 5
+    PID_AFTER=$(pidof birddog-web-ui 2>/dev/null | awk '{print $1}')
+    CODE=$(curl -s -o /dev/null -m 8 -w '%{http_code}' http://127.0.0.1/login 2>/dev/null || echo 000)
+    # It must answer AND be a different process: an unchanged pid means the
+    # template was never re-read, so the tab would not actually be there.
+    if [ -n "$PID_AFTER" ] && [ "$PID_AFTER" != "$PID_BEFORE" ] && { [ "$CODE" = 200 ] || [ "$CODE" = 302 ] || [ "$CODE" = 301 ]; }; then
+      log "web UI healthy after patch (pid ${PID_BEFORE:-none} -> $PID_AFTER, HTTP $CODE) — UVC Converter tab is live"
+    else
+      log "WARNING: web UI unhealthy after patching (pid ${PID_BEFORE:-none} -> ${PID_AFTER:-none}, HTTP $CODE) — ROLLING BACK"
+      /userdata/bd-cam/bdcam --unpatch-ui /srv/birddog-web-ui >> /tmp/bd-custom-install.log 2>&1
+      systemctl restart "$WEBUI_UNIT" 2>/dev/null
+      sleep 5
+      log "after rollback: HTTP $(curl -s -o /dev/null -m 8 -w '%{http_code}' http://127.0.0.1/login 2>/dev/null || echo 000); stock template also at /srv/birddog-web-ui/videoset.html.bdcam-orig"
+    fi
+  else
+    log "WARNING: could not patch the web UI — left untouched"
+  fi
+fi
+
+# ----------------------------------------------------------------- bdplay
+# USB media player. Adds a "USB" entry to birdUI's source dropdown and plays
+# video/stills/PDF off a stick, hardware-decoded straight to HDMI.
+#
+# This is the one payload that touches the rootfs beyond a systemd unit: bdplay
+# edits /srv/birddog-web-ui/videoset.html to add the dropdown entry. It keeps a
+# pristine copy at videoset.html.bdplay-stock and writes atomically, and
+# `bdplay -unpatch-ui` restores it exactly, so the web UI stays recoverable.
+#
+# bdplay stops BirdDogRunner while it owns the display and restarts it on every
+# exit path. TimeoutStopSec gives it room to do that; a SIGKILL here is what
+# would leave the unit with a dark HDMI output and PPApp dead.
+if [ "$WITH_PLAY" = 1 ] && [ -d "$SDIR/userdata/bd-play" ]; then
+  log "installing bdplay (USB media player) to /userdata/bd-play"
+  mkdir -p /userdata/bd-play
+  cp -f "$SDIR/userdata/bd-play/bdplay" /userdata/bd-play/
+  chmod 755 /userdata/bd-play/bdplay
+  if [ -f "$SDIR/userdata/bd-play/mutool" ]; then
+    cp -f "$SDIR/userdata/bd-play/mutool" /userdata/bd-play/
+    chmod 755 /userdata/bd-play/mutool
+    log "bdplay: mutool included, PDF playback enabled"
+  else
+    log "bdplay: no mutool, PDF playback disabled"
+  fi
+  # exFAT is a FUSE driver, so it needs no kernel module and no image change —
+  # /dev/fuse and fuseblk are already present on stock firmware.
+  if [ -f "$SDIR/userdata/bd-play/mount.exfat-fuse" ]; then
+    cp -f "$SDIR/userdata/bd-play/mount.exfat-fuse" /userdata/bd-play/
+    chmod 755 /userdata/bd-play/mount.exfat-fuse
+    log "bdplay: exFAT mount helper installed"
+  else
+    log "bdplay: no exFAT helper — sticks formatted exFAT will not mount"
+  fi
+  chown -R root:root /userdata/bd-play
+
+  cat > /etc/systemd/system/bd-play.service <<'EOF'
+[Unit]
+Description=BirdDog PLAY USB media player (custom)
+After=network.target BirdDogWebUI.service
+# Deliberately NOT After/Requires BirdDogRunner: bdplay stops and starts that
+# unit itself when it takes the display, and a dependency would make systemd
+# fight it.
+
+[Service]
+Type=simple
+ExecStart=/userdata/bd-play/bdplay -addr :8091 -state-dir /userdata/bd-play
+Restart=always
+RestartSec=3
+# Room to stop a pipeline and restart BirdDogRunner on the way out.
+TimeoutStopSec=30
+KillSignal=SIGTERM
+Nice=-10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  log "bdplay unit written"
 fi
 
 # -------------------------------------------------------------------- rootfs
@@ -217,6 +344,16 @@ if [ -f /etc/systemd/system/bd-cam.service ]; then
   systemctl enable bd-cam.service 2>/dev/null
   systemctl restart bd-cam.service 2>/dev/null && log "bd-cam started" \
     || log "WARNING: bd-cam failed to start — check 'journalctl -u bd-cam'"
+fi
+if [ -f /etc/systemd/system/bd-play.service ]; then
+  systemctl enable bd-play.service 2>/dev/null
+  systemctl restart bd-play.service 2>/dev/null && log "bd-play started" \
+    || log "WARNING: bd-play failed to start — check 'journalctl -u bd-play'"
+fi
+if [ -f /etc/systemd/system/bd-cam-api.service ]; then
+  systemctl enable bd-cam-api.service 2>/dev/null
+  systemctl restart bd-cam-api.service 2>/dev/null && log "bd-cam-api started on :8090" \
+    || log "WARNING: bd-cam-api failed to start — check 'journalctl -u bd-cam-api'"
 fi
 
 # --------------------------------------------------- restore stock services

@@ -70,6 +70,7 @@ async function build() {
 
     const withTailscale = els.optTailscale.checked;
     const withKvm = els.optKvm.checked && !!manifest.bdkvm;
+    const withPlay = els.optPlay.checked && !!manifest.bdplay;
     const doReboot = els.optReboot.checked;
     const tag = (els.tag.value.trim() || 'web').replace(/[^A-Za-z0-9._-]/g, '-');
 
@@ -82,7 +83,7 @@ async function build() {
     log(`  probe.sh sha256 ${manifest.probe.sha256.slice(0, 16)}…`);
 
     tar.text('./authorized_keys', keyText + '\n', 0o600);
-    tar.text('./build.conf', buildConf({ tag, withTailscale, withKvm, doReboot }), 0o644);
+    tar.text('./build.conf', buildConf({ tag, withTailscale, withKvm, withPlay, doReboot }), 0o644);
 
     for (const rel of manifest.rootfsOverlay || []) {
       tar.file(`./files/${rel}`, await asset(`assets/files/${rel}`), 0o644);
@@ -117,6 +118,37 @@ async function build() {
       log('NDI KVM: skipped');
     }
 
+    if (withPlay) {
+      log('adding the USB media player…');
+      // The player itself is required; the two helpers are optional, and the
+      // installer reports which capabilities it ended up with. A package
+      // without them still plays video and stills off FAT32/NTFS.
+      const parts = [
+        ['bdplay', 'assets/bdplay-linux-arm64', './userdata/bd-play/bdplay', manifest.bdplay, true],
+        ['bdpdf', 'assets/bdpdf-linux-arm64', './userdata/bd-play/bdpdf', manifest.bdpdf, false],
+        ['libpdfium.so', 'assets/libpdfium.so', './userdata/bd-play/libpdfium.so', manifest.pdfium, false],
+        ['exFAT helper', 'assets/mount.exfat-fuse', './userdata/bd-play/mount.exfat-fuse', manifest.exfat, false],
+      ];
+      for (const [label, url, dest, meta, required] of parts) {
+        if (!meta) {
+          if (required) throw new Error(`${label} asset is missing from this build`);
+          log(`  ${label}: not available — skipped`);
+          continue;
+        }
+        const data = await asset(url);
+        if (data.length !== meta.size) throw new Error(`${label} asset size mismatch`);
+        if ((await sha256Hex(data)) !== meta.sha256) {
+          throw new Error(`${label} asset SHA-256 mismatch`);
+        }
+        tar.file(dest, data, 0o755);
+        log(`  ${label} ${humanSize(data.length)}, sha256 verified`, 'ok');
+      }
+      if (!manifest.bdpdf || !manifest.pdfium) log('  PDF playback will be unavailable');
+      if (!manifest.exfat) log('  exFAT sticks will not mount');
+    } else {
+      log('USB media player: skipped');
+    }
+
     log('writing tar and gzipping…');
     const blob = await tar.gzip();
     const digest = await sha256Hex(blob);
@@ -148,9 +180,9 @@ function download() {
 
 async function init() {
   for (const id of [
-    'key', 'tag', 'optTailscale', 'optKvm', 'optReboot', 'tsFile',
+    'key', 'tag', 'optTailscale', 'optKvm', 'optPlay', 'optReboot', 'tsFile',
     'build', 'download', 'log', 'result', 'resultName', 'resultSize',
-    'resultSha', 'kvmRow', 'payloadInfo', 'keyHint',
+    'resultSha', 'kvmRow', 'playRow', 'playExtras', 'payloadInfo', 'keyHint',
   ]) {
     els[id] = document.getElementById(id);
   }
@@ -183,6 +215,28 @@ async function init() {
     els.kvmRow.title = 'bdkvm-linux-arm64 was not present when assets were built';
   }
 
+  if (!manifest.bdplay) {
+    els.optPlay.checked = false;
+    els.optPlay.disabled = true;
+    els.playRow.classList.add('disabled');
+    els.playRow.title = 'bdplay-linux-arm64 was not present when assets were built';
+  } else {
+    // Say up front which capabilities this particular build carries, rather
+    // than letting the user find out on the device that PDFs do not play or an
+    // exFAT stick will not mount.
+    const have = [];
+    if (manifest.bdpdf && manifest.pdfium) have.push('PDF (PDFium)');
+    if (manifest.exfat) have.push('exFAT');
+    const size = humanSize(
+      manifest.bdplay.size +
+      (manifest.bdpdf?.size || 0) +
+      (manifest.pdfium?.size || 0) +
+      (manifest.exfat?.size || 0));
+    els.playExtras.textContent = have.length
+      ? `Includes ${have.join(' and ')} support. Adds about ${size} to the package.`
+      : `Video and stills only in this build — no PDF or exFAT support. Adds about ${size}.`;
+  }
+
   // ?demo=1 fills in an obviously-fake key and builds, so screenshots and video
   // are of the real tool doing real work rather than an empty form. It never
   // downloads — the visitor still has to ask for the file.
@@ -190,6 +244,7 @@ async function init() {
     els.key.value =
       'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyForTheDemoOnly you@laptop';
     els.optKvm.checked = !!manifest.bdkvm;
+    els.optPlay.checked = !!manifest.bdplay;
     els.tag.value = 'demo';
     build();
   }

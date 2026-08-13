@@ -43,7 +43,32 @@ done
 [ -f "$RE/tools/bdkvm/dist/bdkvm-linux-arm64" ] &&
   copy "$RE/tools/bdkvm/dist/bdkvm-linux-arm64" "$REPO/agent/dist/bdkvm-linux-arm64"
 
-chmod 755 "$REPO"/installer/* "$REPO"/agent/dist/* 2>/dev/null || true
+# ------------------------------------------------------------------- bdplay
+# The USB media player. Unlike bdkvm, its SOURCE is not vendored here: bdplay
+# is its own public repo (github.com/stoatworks-labs/bdplay), so the page can
+# link to it and there is no second copy to drift. Only the built binaries come
+# across, which is what build-assets.sh needs.
+#
+# mutool is deliberately absent. It is AGPL v3 — serving it from this page
+# would be distribution, and §13 reaches network users — and at 37 MB it
+# exceeds Cloudflare's 25 MiB per-file asset limit anyway. PDF here is PDFium
+# (BSD-3) via bdpdf. See bdplay's AGENTS.md.
+PLAY="${BDPLAY:-$HOME/Projects/bdplay}"
+if [ -d "$PLAY/dist" ]; then
+  mkdir -p "$REPO/player/dist"
+  for f in bdplay-linux-arm64 bdpdf-linux-arm64 libpdfium.so mount.exfat-fuse-linux-arm64; do
+    [ -f "$PLAY/dist/$f" ] && copy "$PLAY/dist/$f" "$REPO/player/dist/$f"
+  done
+  if [ -f "$PLAY/dist/mutool-linux-arm64" ] && [ -f "$REPO/player/dist/mutool-linux-arm64" ]; then
+    echo "error: mutool must never be shipped from this repo (AGPL v3)" >&2
+    exit 1
+  fi
+else
+  echo "note: no bdplay checkout at $PLAY — the USB media player option will be" \
+       "disabled in the UI. Set BDPLAY= to override." >&2
+fi
+
+chmod 755 "$REPO"/installer/* "$REPO"/agent/dist/* "$REPO"/player/dist/* 2>/dev/null || true
 
 if [ "$changed" = 1 ]; then
   echo

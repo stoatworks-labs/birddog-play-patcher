@@ -34,6 +34,41 @@ else
        "the KVM option will be disabled in the UI" >&2
 fi
 
+# --------------------------------------------------------------- bdplay
+# The USB media player, plus its two optional helpers. Sizes matter here:
+# Cloudflare Workers static assets cap at 25 MiB per file, which is why PDF is
+# PDFium (7.5 MB, BSD-3) and not MuPDF (37 MB, AGPL v3).
+stage_play() { # varname filename source-path label
+  local var="$1" name="$2" src="$3" label="$4"
+  if [ -f "$src" ]; then
+    if file "$src" | grep -q aarch64; then
+      cp "$src" "$OUT/$name"
+      printf -v "$var" '{"size": %s, "sha256": "%s"}' \
+        "$(wc -c < "$src" | tr -d ' ')" "$(sha "$src")"
+      return
+    fi
+    echo "warning: $src is not aarch64 — $label omitted" >&2
+  fi
+  printf -v "$var" 'null'
+}
+
+PLAY_LINE=null PDF_LINE=null PDFLIB_LINE=null EXFAT_LINE=null
+stage_play PLAY_LINE   bdplay-linux-arm64      "$REPO/player/dist/bdplay-linux-arm64"           "USB media player"
+stage_play PDF_LINE    bdpdf-linux-arm64       "$REPO/player/dist/bdpdf-linux-arm64"            "PDF renderer"
+stage_play PDFLIB_LINE libpdfium.so            "$REPO/player/dist/libpdfium.so"                 "PDFium"
+stage_play EXFAT_LINE  mount.exfat-fuse        "$REPO/player/dist/mount.exfat-fuse-linux-arm64" "exFAT helper"
+
+[ "$PLAY_LINE" = null ] && echo "warning: player/dist/bdplay-linux-arm64 missing" \
+  "(run bdplay's build.sh, then scripts/sync-from-re.sh) — the USB media player" \
+  "option will be disabled in the UI" >&2
+
+# Belt and braces against the one mistake that would matter: an AGPL binary
+# reaching a public CDN.
+if [ -e "$OUT/mutool" ] || [ -e "$REPO/player/dist/mutool-linux-arm64" ]; then
+  echo "error: mutool (AGPL v3) must never be staged as a web asset" >&2
+  exit 1
+fi
+
 cat > "$OUT/manifest.json" <<EOF
 {
   "generated": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
@@ -42,6 +77,10 @@ cat > "$OUT/manifest.json" <<EOF
   "probe":  { "size": $(wc -c < "$OUT/probe.sh" | tr -d ' '),   "sha256": "$(sha "$OUT/probe.sh")" },
   "kvmRun": { "size": $(wc -c < "$OUT/kvm-run.sh" | tr -d ' '), "sha256": "$(sha "$OUT/kvm-run.sh")" },
   "bdkvm":  $KVM_LINE,
+  "bdplay": $PLAY_LINE,
+  "bdpdf":  $PDF_LINE,
+  "pdfium": $PDFLIB_LINE,
+  "exfat":  $EXFAT_LINE,
   "rootfsOverlay": []
 }
 EOF

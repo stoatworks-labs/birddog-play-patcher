@@ -12,7 +12,7 @@
 //
 // Exits non-zero on any structural problem.
 
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
@@ -94,7 +94,9 @@ tar.file('./probe.sh', new Uint8Array(await readFile(join(ASSETS, 'probe.sh'))),
 tar.text('./authorized_keys',
   'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYFORPACKAGEBUILDONLY test@example\n', 0o600);
 tar.text('./build.conf',
-  buildConf({ tag: 'citest', withTailscale: true, withKvm: true, doReboot: false }), 0o644);
+  buildConf({
+    tag: 'citest', withTailscale: true, withKvm: true, withPlay: true, doReboot: false,
+  }), 0o644);
 
 const bins = await extractTailscale(await tailscaleTarball());
 check(isArm64Elf(bins.tailscaled), 'tailscaled is an aarch64 ELF');
@@ -107,6 +109,20 @@ check(isArm64Elf(bdkvm), 'bdkvm is an aarch64 ELF');
 tar.file('./userdata/birddog-kvm/bdkvm', bdkvm, 0o755);
 tar.file('./userdata/birddog-kvm/run.sh',
   new Uint8Array(await readFile(join(ASSETS, 'kvm-run.sh'))), 0o755);
+
+// USB media player. libpdfium.so is a shared object rather than an executable,
+// but isArm64Elf only asserts the ELF header and machine type, which is what
+// matters — a host-built x86 file reaching the device is the failure to catch.
+for (const [asset, dest] of [
+  ['bdplay-linux-arm64', './userdata/bd-play/bdplay'],
+  ['bdpdf-linux-arm64', './userdata/bd-play/bdpdf'],
+  ['libpdfium.so', './userdata/bd-play/libpdfium.so'],
+  ['mount.exfat-fuse', './userdata/bd-play/mount.exfat-fuse'],
+]) {
+  const data = new Uint8Array(await readFile(join(ASSETS, asset)));
+  check(isArm64Elf(data), `${asset} is an aarch64 ELF`);
+  tar.file(dest, data, 0o755);
+}
 
 const blob = await tar.gzip();
 await mkdir(OUTDIR, { recursive: true });
@@ -124,8 +140,27 @@ for (const n of [
   './update', './probe.sh', './build.conf', './authorized_keys',
   './userdata/tailscale/tailscaled', './userdata/tailscale/tailscale',
   './userdata/birddog-kvm/bdkvm', './userdata/birddog-kvm/run.sh',
+  './userdata/bd-play/bdplay', './userdata/bd-play/bdpdf',
+  './userdata/bd-play/libpdfium.so', './userdata/bd-play/mount.exfat-fuse',
 ]) {
   check(byName.has(n), `contains ${n}`);
+}
+
+// Policy, not a bug hunt: mutool is AGPL v3. Serving it from this page would be
+// distribution, and §13 reaches users interacting over a network — which a
+// web-driven media player plainly has. PDF here is PDFium (BSD-3) via bdpdf.
+// This asserts the mistake cannot happen quietly.
+check(!members.some((m) => /mutool|mupdf/i.test(m.name)),
+  'package contains no AGPL PDF renderer (mutool/MuPDF)');
+check(!existsSync(join(ASSETS, 'mutool')),
+  'no mutool staged as a web asset');
+
+// Every asset must fit Cloudflare Workers' 25 MiB per-file static asset limit,
+// or the deploy silently has nothing to serve.
+const LIMIT = 25 * 1024 * 1024;
+for (const f of await readdir(ASSETS)) {
+  const { size } = await stat(join(ASSETS, f));
+  check(size <= LIMIT, `asset ${f} is within Cloudflare's 25 MiB limit (${(size / 1048576).toFixed(1)} MB)`);
 }
 
 const updateMember = byName.get('./update');
