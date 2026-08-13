@@ -22,6 +22,7 @@ log() { birddog-updater-log "[custom] $*"; echo "[custom] $*" >> /tmp/bd-custom-
 [ -f "$SDIR/build.conf" ] && . "$SDIR/build.conf"
 BUILD_TAG="${BUILD_TAG:-unknown}"
 WITH_TAILSCALE="${WITH_TAILSCALE:-0}"
+WITH_TAILSCALE_UI="${WITH_TAILSCALE_UI:-0}"
 WITH_KVM="${WITH_KVM:-0}"
 WITH_CAM="${WITH_CAM:-0}"
 WITH_CAM_UI="${WITH_CAM_UI:-0}"
@@ -108,6 +109,68 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
     log "tailscale unit written (tun args: '${TUNARG:-none}')"
+    TS_INSTALLED=1
+  fi
+fi
+
+# --------------------------------------------------- tailscale birdUI panel
+# Signing Tailscale in from the web UI instead of over SSH.
+#
+# This patches /srv/birddog-web-ui/settings.html -- the System page, and NOT
+# system-settings.html, which is older markup this firmware does not serve. That
+# page also carries the System Update form, so a bad edit takes the firmware
+# upload path down with it. The patch itself lives in bdts, where it is unit
+# tested against real firmware pages, refuses unfamiliar markup and is exactly
+# reversible; the health check and rollback below are the second line.
+if [ "${TS_INSTALLED:-0}" = 1 ] && [ "$WITH_TAILSCALE_UI" = 1 ] && [ -f "$SDIR/userdata/bd-tailscale-ui/bdts" ]; then
+  log "installing the birdUI Tailscale panel"
+  mkdir -p /userdata/bd-tailscale-ui
+  cp -f "$SDIR/userdata/bd-tailscale-ui/bdts" /userdata/bd-tailscale-ui/
+  chmod 755 /userdata/bd-tailscale-ui/bdts
+  chown -R root:root /userdata/bd-tailscale-ui
+
+  # 8092 because 8080 is BirdDog's API, 8090 is bd-cam-api and 8091 is bd-play.
+  # A collision is silent: the second service to start fails to bind and its
+  # panel simply never answers.
+  cat > /etc/systemd/system/bd-tailscale-ui.service <<'EOF'
+[Unit]
+Description=Tailscale settings panel for birdUI (custom)
+After=network.target BirdDogWebUI.service bd-tailscaled.service
+Wants=bd-tailscaled.service
+
+[Service]
+Type=simple
+ExecStart=/userdata/bd-tailscale-ui/bdts --serve :8092
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  WEBUI_UNIT=BirdDogWebUI
+  if ! systemctl cat "$WEBUI_UNIT" >/dev/null 2>&1; then
+    log "WARNING: no $WEBUI_UNIT unit on this firmware -- skipping the Tailscale panel"
+  elif /userdata/bd-tailscale-ui/bdts --patch-ui --ui-dir /srv/birddog-web-ui --api-port 8092 >> /tmp/bd-custom-install.log 2>&1; then
+    PID_BEFORE=$(pidof birddog-web-ui 2>/dev/null | awk '{print $1}')
+    log "System page patched; restarting $WEBUI_UNIT (was pid ${PID_BEFORE:-none})"
+    systemctl restart "$WEBUI_UNIT" 2>/dev/null
+    sleep 5
+    PID_AFTER=$(pidof birddog-web-ui 2>/dev/null | awk '{print $1}')
+    CODE=$(curl -s -o /dev/null -m 8 -w '%{http_code}' http://127.0.0.1/login 2>/dev/null || echo 000)
+    # Same trap as the UVC tab: an unchanged pid means the template was never
+    # re-read, so an HTTP 200 is answered by the process that never reloaded.
+    if [ -n "$PID_AFTER" ] && [ "$PID_AFTER" != "$PID_BEFORE" ] && { [ "$CODE" = 200 ] || [ "$CODE" = 302 ] || [ "$CODE" = 301 ]; }; then
+      log "web UI healthy after patch (pid ${PID_BEFORE:-none} -> $PID_AFTER, HTTP $CODE) -- Tailscale panel is live"
+    else
+      log "WARNING: web UI unhealthy after patching (pid ${PID_BEFORE:-none} -> ${PID_AFTER:-none}, HTTP $CODE) -- ROLLING BACK"
+      /userdata/bd-tailscale-ui/bdts --unpatch-ui --ui-dir /srv/birddog-web-ui >> /tmp/bd-custom-install.log 2>&1
+      systemctl restart "$WEBUI_UNIT" 2>/dev/null
+      sleep 5
+      log "after rollback: HTTP $(curl -s -o /dev/null -m 8 -w '%{http_code}' http://127.0.0.1/login 2>/dev/null || echo 000); stock template also at /srv/birddog-web-ui/settings.html.bdts-stock"
+    fi
+  else
+    log "WARNING: could not patch the System page -- left untouched"
   fi
 fi
 
@@ -335,6 +398,11 @@ if [ -f /etc/systemd/system/bd-tailscaled.service ]; then
   systemctl restart bd-tailscaled.service 2>/dev/null && log "tailscaled started" \
     || log "WARNING: tailscaled failed to start — check 'journalctl -u bd-tailscaled'"
 fi
+if [ -f /etc/systemd/system/bd-tailscale-ui.service ]; then
+  systemctl enable bd-tailscale-ui.service 2>/dev/null
+  systemctl restart bd-tailscale-ui.service 2>/dev/null && log "tailscale panel started" \
+    || log "WARNING: the tailscale panel failed to start — check 'journalctl -u bd-tailscale-ui'"
+fi
 if [ -f /etc/systemd/system/bd-kvm.service ]; then
   systemctl enable bd-kvm.service 2>/dev/null
   systemctl restart bd-kvm.service 2>/dev/null && log "bd-kvm started" \
@@ -374,8 +442,15 @@ fi
 sync; sync
 log "installer finished (build ${BUILD_TAG})"
 log "probe report: http://<this-device>/static/bd-probe.txt"
-log "tailscale is installed but NOT authenticated — ssh in on port 9031 and run:"
-log "  /userdata/tailscale/tailscale --socket=/run/bd-tailscaled.sock up"
+if [ "${TS_INSTALLED:-0}" = 1 ]; then
+  if [ -f /etc/systemd/system/bd-tailscale-ui.service ]; then
+    log "tailscale is installed but NOT authenticated — sign in from the System page of the"
+    log "web UI, or ssh in on port 9031 and run:"
+  else
+    log "tailscale is installed but NOT authenticated — ssh in on port 9031 and run:"
+  fi
+  log "  /userdata/tailscale/tailscale --socket=/run/bd-tailscaled.sock up"
+fi
 
 if [ "$DO_REBOOT" = 1 ]; then
   log "rebooting"

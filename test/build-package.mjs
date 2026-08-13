@@ -95,7 +95,8 @@ tar.text('./authorized_keys',
   'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITESTKEYFORPACKAGEBUILDONLY test@example\n', 0o600);
 tar.text('./build.conf',
   buildConf({
-    tag: 'citest', withTailscale: true, withKvm: true, withPlay: true, doReboot: false,
+    tag: 'citest', withTailscale: true, withTailscaleUi: true, withKvm: true,
+    withPlay: true, doReboot: false,
   }), 0o644);
 
 const bins = await extractTailscale(await tailscaleTarball());
@@ -103,6 +104,14 @@ check(isArm64Elf(bins.tailscaled), 'tailscaled is an aarch64 ELF');
 check(isArm64Elf(bins.tailscale), 'tailscale is an aarch64 ELF');
 tar.file('./userdata/tailscale/tailscaled', bins.tailscaled, 0o755);
 tar.file('./userdata/tailscale/tailscale', bins.tailscale, 0o755);
+
+// The birdUI Tailscale panel. It ships with the Tailscale payload rather than
+// as its own option, so a package that carries Tailscale and NOT this is the
+// regression to catch: the device installs fine and then silently still needs
+// SSH to sign in, which is the whole problem the panel exists to remove.
+const bdts = new Uint8Array(await readFile(join(ASSETS, 'bdts-linux-arm64')));
+check(isArm64Elf(bdts), 'bdts is an aarch64 ELF');
+tar.file('./userdata/bd-tailscale-ui/bdts', bdts, 0o755);
 
 const bdkvm = new Uint8Array(await readFile(join(ASSETS, 'bdkvm-linux-arm64')));
 check(isArm64Elf(bdkvm), 'bdkvm is an aarch64 ELF');
@@ -139,6 +148,7 @@ console.log('\nstructure:');
 for (const n of [
   './update', './probe.sh', './build.conf', './authorized_keys',
   './userdata/tailscale/tailscaled', './userdata/tailscale/tailscale',
+  './userdata/bd-tailscale-ui/bdts',
   './userdata/birddog-kvm/bdkvm', './userdata/birddog-kvm/run.sh',
   './userdata/bd-play/bdplay', './userdata/bd-play/bdpdf',
   './userdata/bd-play/libpdfium.so', './userdata/bd-play/mount.exfat-fuse',
@@ -173,6 +183,12 @@ check(Buffer.compare(Buffer.from(updateMember.data), await readFile(join(REPO, '
 // Nothing derived from the vendor's encrypted payload may ever appear here.
 const all = Buffer.concat(members.map((m) => Buffer.from(m.data)));
 check(!all.includes('bdpff'), 'package contains no reference to the vendor payload');
+
+// The panel and the Tailscale binaries are one feature; shipping either alone
+// is a packaging mistake rather than a choice.
+const conf = new TextDecoder().decode(byName.get('./build.conf').data);
+check(/^WITH_TAILSCALE=1$/m.test(conf) === /^WITH_TAILSCALE_UI=1$/m.test(conf),
+  'build.conf ships the Tailscale panel with the Tailscale payload');
 
 console.log(failures ? `\n${failures} FAILED` : '\nall checks passed');
 process.exit(failures ? 1 : 0);

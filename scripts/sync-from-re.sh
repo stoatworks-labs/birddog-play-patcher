@@ -68,7 +68,21 @@ else
        "disabled in the UI. Set BDPLAY= to override." >&2
 fi
 
-chmod 755 "$REPO"/installer/* "$REPO"/agent/dist/* "$REPO"/player/dist/* 2>/dev/null || true
+# --------------------------------------------------------------------- bdts
+# The birdUI Tailscale panel. Like bdplay and unlike bdkvm, its SOURCE is not
+# vendored here: bdts is its own public repo
+# (github.com/stoatworks-labs/bdts), so the page links to it and there is no
+# second copy to drift. Only the built binary comes across.
+TS_UI="${BDTS:-$HOME/Projects/bdts}"
+if [ -f "$TS_UI/dist/bdts-linux-arm64" ]; then
+  mkdir -p "$REPO/tailscale-ui/dist"
+  copy "$TS_UI/dist/bdts-linux-arm64" "$REPO/tailscale-ui/dist/bdts-linux-arm64"
+else
+  echo "note: no bdts build at $TS_UI/dist — the Tailscale payload will install" \
+       "without the birdUI panel, so devices will need SSH to sign in." >&2
+fi
+
+chmod 755 "$REPO"/installer/* "$REPO"/agent/dist/* "$REPO"/player/dist/* "$REPO"/tailscale-ui/dist/* 2>/dev/null || true
 
 if [ "$changed" = 1 ]; then
   echo

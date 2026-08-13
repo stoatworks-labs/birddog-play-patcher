@@ -52,11 +52,21 @@ stage_play() { # varname filename source-path label
   printf -v "$var" 'null'
 }
 
+BDTS_LINE=null
 PLAY_LINE=null PDF_LINE=null PDFLIB_LINE=null EXFAT_LINE=null
 stage_play PLAY_LINE   bdplay-linux-arm64      "$REPO/player/dist/bdplay-linux-arm64"           "USB media player"
 stage_play PDF_LINE    bdpdf-linux-arm64       "$REPO/player/dist/bdpdf-linux-arm64"            "PDF renderer"
 stage_play PDFLIB_LINE libpdfium.so            "$REPO/player/dist/libpdfium.so"                 "PDFium"
 stage_play EXFAT_LINE  mount.exfat-fuse        "$REPO/player/dist/mount.exfat-fuse-linux-arm64" "exFAT helper"
+
+# --------------------------------------------------------------- bdts
+# The birdUI Tailscale panel. Ships with the Tailscale payload rather than as
+# its own option: without it a device installs Tailscale and then still needs
+# SSH to sign in, which is the gap it closes.
+stage_play BDTS_LINE bdts-linux-arm64 "$REPO/tailscale-ui/dist/bdts-linux-arm64" "Tailscale panel"
+[ "$BDTS_LINE" = null ] && echo "warning: tailscale-ui/dist/bdts-linux-arm64 missing" \
+  "(run bdts's build.sh, then scripts/sync-from-re.sh) — packages will install" \
+  "Tailscale WITHOUT the birdUI panel, so signing in will need SSH" >&2
 
 [ "$PLAY_LINE" = null ] && echo "warning: player/dist/bdplay-linux-arm64 missing" \
   "(run bdplay's build.sh, then scripts/sync-from-re.sh) — the USB media player" \
@@ -77,6 +87,7 @@ cat > "$OUT/manifest.json" <<EOF
   "probe":  { "size": $(wc -c < "$OUT/probe.sh" | tr -d ' '),   "sha256": "$(sha "$OUT/probe.sh")" },
   "kvmRun": { "size": $(wc -c < "$OUT/kvm-run.sh" | tr -d ' '), "sha256": "$(sha "$OUT/kvm-run.sh")" },
   "bdkvm":  $KVM_LINE,
+  "bdts":   $BDTS_LINE,
   "bdplay": $PLAY_LINE,
   "bdpdf":  $PDF_LINE,
   "pdfium": $PDFLIB_LINE,

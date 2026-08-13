@@ -125,7 +125,10 @@
         <div class="t">Tailscale</div>
         <div class="d">Current stable arm64 build into <code>/userdata/tailscale</code>, with a
           systemd unit. <strong>No auth key is baked in</strong> — it would sit in cleartext in
-          the archive. SSH in afterwards and run <code>tailscale up</code>.
+          the archive. Instead this adds a <strong>Tailscale panel to the System page of the
+          PLAY's own web UI</strong>, so you sign the device in from a browser and never need
+          SSH for it. Changing anything there needs a birdUI login; reading status does not.
+          You can still <code>tailscale up</code> over SSH on port 9031 if you prefer.
           Stock firmware has no <code>/dev/net/tun</code> and ships no kernel modules at all, so
           you get userspace-networking. Inbound still works — SSH, the web UI and the
           <code>:8080</code> API are all reachable over the tailnet, measured at ~195 Mbps
@@ -225,8 +228,13 @@
      an ACL for this node; the device has no access control of its own to fall back on.</p>
 
   <h2>Undoing it</h2>
-  <p class="mono">systemctl disable --now bd-tailscaled bd-kvm<br>
-     rm -rf /userdata/tailscale /userdata/bd-kvm /etc/systemd/system/bd-{tailscaled,kvm}.service</p>
+  <p class="mono">/userdata/bd-tailscale-ui/bdts --unpatch-ui &amp;&amp; systemctl restart BirdDogWebUI<br>
+     systemctl disable --now bd-tailscaled bd-kvm bd-tailscale-ui<br>
+     rm -rf /userdata/tailscale /userdata/bd-kvm /userdata/bd-tailscale-ui /etc/systemd/system/bd-{tailscaled,kvm,tailscale-ui}.service</p>
+  <p class="note">Take the first line before the others: it puts the System page back exactly as
+     it shipped. A pristine copy is also kept beside it as
+     <code>settings.html.bdts-stock</code>, and <code>bdts --restore-ui</code> restores from
+     that.</p>
   <p class="note">Then reflash stock firmware if you want a clean unit. Recovery-mode flashing of
      the factory image is a proven path, but it restores factory state — not this unit's
      provisioned serial, hostname or <code>/userdata</code>.</p>
@@ -242,8 +250,10 @@
        <a href="https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/installer/update">installer/update</a>.
        Source for the whole tool, including the on-device KVM agent, is at
        <a href="https://github.com/stoatworks-labs/birddog-play-patcher">github.com/stoatworks-labs/birddog-play-patcher</a>,
-       and the USB media player is at
-       <a href="https://github.com/stoatworks-labs/bd-play-usb-player">github.com/stoatworks-labs/bd-play-usb-player</a>.</p>
+       the USB media player is at
+       <a href="https://github.com/stoatworks-labs/bd-play-usb-player">github.com/stoatworks-labs/bd-play-usb-player</a>,
+       and the birdUI Tailscale panel is at
+       <a href="https://github.com/stoatworks-labs/bdts">github.com/stoatworks-labs/bdts</a> (MIT).</p>
     <p>The package you download contains the official
        <a href="https://tailscale.com">Tailscale</a> arm64 binaries, redistributed unmodified
        under the <a href="https://github.com/tailscale/tailscale/blob/main/LICENSE">BSD-3-Clause

@@ -69,6 +69,10 @@ async function build() {
     if (keyErr) throw new Error(keyErr);
 
     const withTailscale = els.optTailscale.checked;
+    // The birdUI panel is not a separate choice: it ships whenever Tailscale
+    // does, because a Tailscale install that still needs SSH to finish is the
+    // problem it solves. It drops out only when the asset is missing.
+    const withTailscaleUi = withTailscale && !!manifest.bdts;
     const withKvm = els.optKvm.checked && !!manifest.bdkvm;
     const withPlay = els.optPlay.checked && !!manifest.bdplay;
     const doReboot = els.optReboot.checked;
@@ -83,7 +87,7 @@ async function build() {
     log(`  probe.sh sha256 ${manifest.probe.sha256.slice(0, 16)}…`);
 
     tar.text('./authorized_keys', keyText + '\n', 0o600);
-    tar.text('./build.conf', buildConf({ tag, withTailscale, withKvm, withPlay, doReboot }), 0o644);
+    tar.text('./build.conf', buildConf({ tag, withTailscale, withTailscaleUi, withKvm, withPlay, doReboot }), 0o644);
 
     for (const rel of manifest.rootfsOverlay || []) {
       tar.file(`./files/${rel}`, await asset(`assets/files/${rel}`), 0o644);
@@ -100,6 +104,19 @@ async function build() {
       tar.file('./userdata/tailscale/tailscaled', bins.tailscaled, 0o755);
       tar.file('./userdata/tailscale/tailscale', bins.tailscale, 0o755);
       log(`tailscale ${src.version} staged`, 'ok');
+
+      if (withTailscaleUi) {
+        const bdts = await asset('assets/bdts-linux-arm64');
+        if (bdts.length !== manifest.bdts.size) throw new Error('bdts asset size mismatch');
+        if ((await sha256Hex(bdts)) !== manifest.bdts.sha256) {
+          throw new Error('bdts asset SHA-256 mismatch');
+        }
+        tar.file('./userdata/bd-tailscale-ui/bdts', bdts, 0o755);
+        log(`  birdUI panel ${humanSize(bdts.length)}, sha256 verified — ` +
+            'sign in from the System page, no SSH needed', 'ok');
+      } else {
+        log('  birdUI panel unavailable — signing in will need SSH', 'warn');
+      }
     } else {
       log('tailscale: skipped');
     }
