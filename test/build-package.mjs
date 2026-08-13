@@ -96,7 +96,7 @@ tar.text('./authorized_keys',
 tar.text('./build.conf',
   buildConf({
     tag: 'citest', withTailscale: true, withTailscaleUi: true, withKvm: true,
-    withPlay: true, doReboot: false,
+    withPlay: true, withCam: true, withCamUi: true, doReboot: false,
   }), 0o644);
 
 const bins = await extractTailscale(await tailscaleTarball());
@@ -189,6 +189,14 @@ check(!all.includes('bdpff'), 'package contains no reference to the vendor paylo
 const conf = new TextDecoder().decode(byName.get('./build.conf').data);
 check(/^WITH_TAILSCALE=1$/m.test(conf) === /^WITH_TAILSCALE_UI=1$/m.test(conf),
   'build.conf ships the Tailscale panel with the Tailscale payload');
+
+// The converter's web UI tab is served by its binary; asking for the tab
+// without the payload would install a page with nothing behind it.
+check(!/^WITH_CAM_UI=1$/m.test(conf) || /^WITH_CAM=1$/m.test(conf),
+  'build.conf never ships the UVC tab without the converter');
+const camOnly = buildConf({ tag: 't', withCam: false, withCamUi: true, doReboot: false });
+check(/^WITH_CAM_UI=0$/m.test(camOnly),
+  'buildConf refuses the UVC tab when the converter is off');
 
 console.log(failures ? `\n${failures} FAILED` : '\nall checks passed');
 process.exit(failures ? 1 : 0);

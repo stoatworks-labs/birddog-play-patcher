@@ -173,6 +173,43 @@
         </div>
       </div>
     </div>
+    <div class="opt" id="camRow">
+      <input type="checkbox" id="optCam">
+      <div>
+        <div class="t">UVC converter <span class="beta">beta</span></div>
+        <div class="d">Turns the PLAY into a converter the other way round: a USB camera on its
+          USB-A port, out as <strong>NDI</strong>, <strong>NDI|HX</strong>, <strong>SRT</strong> or
+          <strong>HDMI</strong> — any combination, from one capture. Settings live in a
+          <strong>UVC Converter</strong> tab in the web UI, or on
+          <code>http://&lt;play&gt;:8091/</code>'s sibling, <code>:8090</code>.
+          <br>
+          A UVC 1.5 camera is bound automatically. This kernel's <code>uvcvideo</code> matches
+          only protocol 0 and ignores 1.5 devices silently — no device node, nothing in the log —
+          so without that they simply never appear.
+          <br>
+          <strong>Why beta:</strong> it runs on a test unit and every claim here is measured, but
+          two things are worth knowing. NDI|HX uses a compressed-packet layout reconstructed from
+          the Advanced SDK's documentation rather than a header, so a future libndi could change
+          it; the symptom would be a picture fault, not a crash. And at heights that are not a
+          multiple of 16 — 1080 among them — the bottom 8 rows are cropped, because H.264 pads to
+          a macroblock boundary and this decoder ignores the crop the standard puts in the
+          stream, showing the padding as a green band.
+          <br>
+          Selecting HDMI directly stops BirdDog's decoder to take the display; routing HDMI
+          through the decoder instead keeps the OSD, web UI and tally alive, and needs NDI|HX.
+          <br>
+          <label style="display:block;margin-top:6px;">
+            <input type="checkbox" id="optCamUi" checked>
+            Add the <strong>UVC Converter</strong> tab to the web UI. Like the media player, this
+            edits <code>videoset.html</code> — marker-wrapped, backed up beside the file, and
+            <code>bdcam --unpatch-ui</code> restores it. It then restarts
+            <code>BirdDogWebUI</code>, checks it came back as a new process, and rolls the patch
+            back if it did not. Without this the converter still runs; its settings are just on
+            port 8090 rather than in the UI.
+          </label>
+        </div>
+      </div>
+    </div>
     <div class="opt">
       <input type="checkbox" id="optReboot">
       <div>

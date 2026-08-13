@@ -75,6 +75,8 @@ async function build() {
     const withTailscaleUi = withTailscale && !!manifest.bdts;
     const withKvm = els.optKvm.checked && !!manifest.bdkvm;
     const withPlay = els.optPlay.checked && !!manifest.bdplay;
+    const withCam = els.optCam.checked && !!manifest.bdcam;
+    const withCamUi = withCam && els.optCamUi.checked;
     const doReboot = els.optReboot.checked;
     const tag = (els.tag.value.trim() || 'web').replace(/[^A-Za-z0-9._-]/g, '-');
 
@@ -87,7 +89,7 @@ async function build() {
     log(`  probe.sh sha256 ${manifest.probe.sha256.slice(0, 16)}…`);
 
     tar.text('./authorized_keys', keyText + '\n', 0o600);
-    tar.text('./build.conf', buildConf({ tag, withTailscale, withTailscaleUi, withKvm, withPlay, doReboot }), 0o644);
+    tar.text('./build.conf', buildConf({ tag, withTailscale, withTailscaleUi, withKvm, withPlay, withCam, withCamUi, doReboot }), 0o644);
 
     for (const rel of manifest.rootfsOverlay || []) {
       tar.file(`./files/${rel}`, await asset(`assets/files/${rel}`), 0o644);
@@ -133,6 +135,24 @@ async function build() {
       log(`  bdkvm ${humanSize(bdkvm.length)}, sha256 verified`, 'ok');
     } else {
       log('NDI KVM: skipped');
+    }
+
+    if (withCam) {
+      log('adding the UVC converter…');
+      const bdcam = await asset('assets/bdcam-linux-arm64');
+      if (bdcam.length !== manifest.bdcam.size) throw new Error('bdcam asset size mismatch');
+      if ((await sha256Hex(bdcam)) !== manifest.bdcam.sha256) {
+        throw new Error('bdcam asset SHA-256 mismatch');
+      }
+      tar.file('./userdata/bd-cam/bdcam', bdcam, 0o755);
+      tar.file('./userdata/bd-cam/run.sh', await asset('assets/cam-run.sh'), 0o755);
+      tar.file('./userdata/bd-cam/api-run.sh', await asset('assets/cam-api-run.sh'), 0o755);
+      log(`  bdcam ${humanSize(bdcam.length)}, sha256 verified`, 'ok');
+      log(withCamUi
+        ? '  web UI tab: yes — videoset.html patched, BirdDogWebUI restarted with rollback'
+        : '  web UI tab: no — settings on port 8090 only');
+    } else {
+      log('UVC converter: skipped');
     }
 
     if (withPlay) {
@@ -198,6 +218,7 @@ function download() {
 async function init() {
   for (const id of [
     'key', 'tag', 'optTailscale', 'optKvm', 'optPlay', 'optReboot', 'tsFile',
+    'optCam', 'optCamUi', 'camRow',
     'build', 'download', 'log', 'result', 'resultName', 'resultSize',
     'resultSha', 'kvmRow', 'playRow', 'playExtras', 'payloadInfo', 'keyHint',
   ]) {
@@ -205,6 +226,12 @@ async function init() {
   }
 
   els.build.addEventListener('click', build);
+  if (els.optCam) {
+    els.optCam.addEventListener('change', () => {
+      els.optCamUi.disabled = !els.optCam.checked;
+    });
+    els.optCamUi.disabled = !els.optCam.checked;
+  }
   els.download.addEventListener('click', download);
   els.key.addEventListener('input', () => {
     const err = els.key.value.trim() ? validateKey(els.key.value) : null;
@@ -237,6 +264,13 @@ async function init() {
     els.optPlay.disabled = true;
     els.playRow.classList.add('disabled');
     els.playRow.title = 'bdplay-linux-arm64 was not present when assets were built';
+  }
+  if (!manifest.bdcam) {
+    els.optCam.checked = false;
+    els.optCam.disabled = true;
+    els.optCamUi.disabled = true;
+    els.camRow.classList.add('disabled');
+    els.camRow.title = 'bdcam-linux-arm64 was not present when assets were built';
   } else {
     // Say up front which capabilities this particular build carries, rather
     // than letting the user find out on the device that PDFs do not play or an

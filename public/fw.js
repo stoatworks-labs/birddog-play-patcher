@@ -163,13 +163,15 @@ export function isArm64Elf(d) {
   );
 }
 
-export function buildConf({ tag, withTailscale, withTailscaleUi, withKvm, withPlay, doReboot }) {
+export function buildConf({ tag, withTailscale, withTailscaleUi, withKvm, withPlay, withCam, withCamUi, doReboot }) {
   return (
     `BUILD_TAG=${tag}\n` +
     `WITH_TAILSCALE=${withTailscale ? 1 : 0}\n` +
     `WITH_TAILSCALE_UI=${withTailscale && withTailscaleUi ? 1 : 0}\n` +
     `WITH_KVM=${withKvm ? 1 : 0}\n` +
     `WITH_PLAY=${withPlay ? 1 : 0}\n` +
+    `WITH_CAM=${withCam ? 1 : 0}\n` +
+    `WITH_CAM_UI=${withCam && withCamUi ? 1 : 0}\n` +
     `DO_REBOOT=${doReboot ? 1 : 0}\n`
   );
 }

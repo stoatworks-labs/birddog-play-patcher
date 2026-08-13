@@ -52,6 +52,14 @@ stage_play() { # varname filename source-path label
   printf -v "$var" 'null'
 }
 
+# --------------------------------------------------------------- bdcam
+# The UVC converter. Staged the same way as the player's binaries.
+CAM_LINE=null
+stage_play CAM_LINE bdcam-linux-arm64 "$REPO/converter/dist/bdcam-linux-arm64" "UVC converter"
+for f in cam-run.sh cam-api-run.sh; do
+  [ -f "$REPO/installer/$f" ] && cp "$REPO/installer/$f" "$OUT/$f"
+done
+
 BDTS_LINE=null
 PLAY_LINE=null PDF_LINE=null PDFLIB_LINE=null EXFAT_LINE=null
 stage_play PLAY_LINE   bdplay-linux-arm64      "$REPO/player/dist/bdplay-linux-arm64"           "USB media player"
@@ -68,6 +76,9 @@ stage_play BDTS_LINE bdts-linux-arm64 "$REPO/tailscale-ui/dist/bdts-linux-arm64"
   "(run bdts's build.sh, then scripts/sync-from-re.sh) — packages will install" \
   "Tailscale WITHOUT the birdUI panel, so signing in will need SSH" >&2
 
+[ "$CAM_LINE" = null ] && echo "warning: converter/dist/bdcam-linux-arm64 missing" \
+  "(build the bdcam repo, then scripts/sync-from-re.sh) — the UVC converter" \
+  "option will be disabled" >&2
 [ "$PLAY_LINE" = null ] && echo "warning: player/dist/bdplay-linux-arm64 missing" \
   "(run bdplay's build.sh, then scripts/sync-from-re.sh) — the USB media player" \
   "option will be disabled in the UI" >&2
@@ -87,6 +98,9 @@ cat > "$OUT/manifest.json" <<EOF
   "probe":  { "size": $(wc -c < "$OUT/probe.sh" | tr -d ' '),   "sha256": "$(sha "$OUT/probe.sh")" },
   "kvmRun": { "size": $(wc -c < "$OUT/kvm-run.sh" | tr -d ' '), "sha256": "$(sha "$OUT/kvm-run.sh")" },
   "bdkvm":  $KVM_LINE,
+  "bdcam":  $CAM_LINE,
+  "camRun":    { "size": $(wc -c < "$OUT/cam-run.sh" | tr -d ' '),     "sha256": "$(sha "$OUT/cam-run.sh")" },
+  "camApiRun": { "size": $(wc -c < "$OUT/cam-api-run.sh" | tr -d ' '), "sha256": "$(sha "$OUT/cam-api-run.sh")" },
   "bdts":   $BDTS_LINE,
   "bdplay": $PLAY_LINE,
   "bdpdf":  $PDF_LINE,

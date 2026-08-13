@@ -34,7 +34,7 @@ copy() { # src dst
   fi
 }
 
-for f in update probe.sh kvm-run.sh; do
+for f in update probe.sh kvm-run.sh cam-run.sh cam-api-run.sh; do
   copy "$RE/tools/fwbuild/payload/$f" "$REPO/installer/$f"
 done
 for f in "$RE"/tools/bdkvm/*.go "$RE"/tools/bdkvm/go.mod "$RE"/tools/bdkvm/go.sum; do
@@ -53,6 +53,16 @@ done
 # would be distribution, and §13 reaches network users — and at 37 MB it
 # exceeds Cloudflare's 25 MiB per-file asset limit anyway. PDF here is PDFium
 # (BSD-3) via bdpdf. See bdplay's AGENTS.md.
+# -------------------------------------------------------------------- bdcam
+# The UVC converter, same arrangement as bdplay: its own public repo
+# (github.com/stoatworks-labs/bdcam), source not vendored here, only the built
+# binary comes across for build-assets.sh.
+CAM="${BDCAM_REPO:-$HOME/Projects/bdcam}"
+if [ -f "$CAM/dist/bdcam-linux-arm64" ]; then
+  mkdir -p "$REPO/converter/dist"
+  copy "$CAM/dist/bdcam-linux-arm64" "$REPO/converter/dist/bdcam-linux-arm64"
+fi
+
 PLAY="${BDPLAY:-$HOME/Projects/bd-play-usb-player}"
 if [ -d "$PLAY/dist" ]; then
   mkdir -p "$REPO/player/dist"
