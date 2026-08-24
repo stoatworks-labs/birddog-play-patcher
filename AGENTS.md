@@ -91,3 +91,10 @@ research repo is not.
 Practically: no feature that reads, decrypts or repacks a vendor `.fw`. The test asserts that a
 generated package contains no reference to the vendor payload; treat that assertion as a policy
 check, not a formality.
+
+## Notes
+
+`docs/NOTES.md` carries this repo's working notes — current status, decisions
+already made, and the traps that have actually bitten. Read it before changing
+anything non-obvious. Cross-cutting fleet knowledge lives in
+[fleet-notes](https://github.com/stoatworks-labs/fleet-notes).
