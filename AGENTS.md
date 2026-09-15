@@ -96,9 +96,12 @@ github.com/stoatworks-labs/bd-play-module-template. Invariants:
 - **`pkgs.tailscale.com` serves no `Access-Control-Allow-Origin`.** That is the entire reason a
   Worker exists. Keep the proxy narrow: hardcoded host, strict version pattern, two routes.
 - **`scripts/sync-from-re.sh` copies `agent/go.mod` and `go.sum` from birddog-re, and Dependabot
-  bumps them HERE.** After a Dependabot merge the sync silently downgrades them (purego 0.11 →
-  0.10.2 on 2026-09-15). Bump upstream `tools/bdkvm/go.mod` first, or `git checkout --` the two
-  files after a sync and say so.
+  bumps them HERE.** Until upstream `tools/bdkvm/go.mod` carries the same versions, every sync
+  silently downgrades them (it did on 2026-09-15, purego 0.11 → 0.10.2, until upstream was
+  aligned in birddog-re 191311f). After any Dependabot merge touching `agent/`, apply the same
+  bump upstream before the next sync — and note that a bump alone does not rebuild
+  `agent/dist/bdkvm-linux-arm64`; that binary is the one proven on hardware, so a rebuild wants a
+  device test.
 - **`readModule` strips one wrapping directory** (`tar czf x.tgz mymodule/`) but refuses two.
   A module whose `module.conf` is not at the root or one level down is not a layout to support;
   it is an archive of the wrong thing.

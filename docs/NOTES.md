@@ -60,7 +60,8 @@ acceptance). Same `--module` contract in birddog-re's `build.sh`.
   had been carrying the bdts panel change UNCOMMITTED since 2026-08-13 (the patcher shipped it
   from the working tree). Committed as-is there before the modules block went on top.
 - `sync-from-re.sh` downgraded `agent/go.mod`/`go.sum` (Dependabot bumped purego here, not
-  upstream) — restored by hand; upstream `tools/bdkvm/go.mod` still needs the bump.
+  upstream) — restored by hand, then upstream aligned the same day (birddog-re 191311f: go 1.25,
+  purego 0.11; vet/test/cross-build pass; dist binary deliberately not rebuilt).
 - Every option row now links the repo its payload comes from; bdcam had never been linked from
   the page at all.
 - Verified: browser-built tar sha256 == Node-built for the same inputs, and real tar + Python
