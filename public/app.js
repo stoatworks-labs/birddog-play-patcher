@@ -2,7 +2,7 @@
 // it can be tested outside a browser; this file is DOM, fetch and progress only.
 
 import {
-  Tar, extractTailscale, sha256Hex, buildConf, validateKey, humanSize,
+  Tar, extractTailscale, extractMediaMTX, sha256Hex, buildConf, validateKey, humanSize,
   readModule, addModule, MODULE_MAX_BYTES,
 } from './fw.js';
 
@@ -58,6 +58,41 @@ async function fetchTailscale() {
 async function readLocalTailscale(file) {
   log(`reading ${file.name} (${humanSize(file.size)})…`);
   const m = file.name.match(/tailscale_([0-9.]+)_arm64\.tgz/);
+  return { version: m ? m[1] : 'local', buf: await file.arrayBuffer() };
+}
+
+// MediaMTX, the streaming gateway's hub. Pinned to one release by the Worker,
+// which also serves the SHA-256 GitHub publishes beside it; the tarball is
+// refused if the digest does not match. Same shape as the Tailscale fetch.
+async function fetchMediaMTX() {
+  log('asking for the pinned MediaMTX release…');
+  const meta = await (await fetch('api/mediamtx/latest')).json();
+  if (meta.error) throw new Error(`MediaMTX: ${meta.error}`);
+  log(`  MediaMTX ${meta.version} (${meta.file})`);
+
+  log('downloading the arm64 tarball…');
+  const res = await fetch(`api/mediamtx/tgz?v=${encodeURIComponent(meta.version)}`);
+  if (!res.ok) throw new Error(`MediaMTX download failed (${res.status})`);
+  const buf = await res.arrayBuffer();
+  log(`  got ${humanSize(buf.byteLength)}`);
+
+  if (!meta.sha256) {
+    throw new Error('MediaMTX: no published SHA-256 to check the tarball against — refusing to package it');
+  }
+  const got = await sha256Hex(buf);
+  if (got !== meta.sha256) {
+    throw new Error(
+      `MediaMTX tarball SHA-256 mismatch — refusing to package it. ` +
+      `expected ${meta.sha256}, got ${got}`,
+    );
+  }
+  log('  SHA-256 matches the published checksums.sha256', 'ok');
+  return { version: meta.version, buf };
+}
+
+async function readLocalMediaMTX(file) {
+  log(`reading ${file.name} (${humanSize(file.size)})…`);
+  const m = file.name.match(/mediamtx_(v[0-9.]+)_linux_arm64\.tar\.gz/);
   return { version: m ? m[1] : 'local', buf: await file.arrayBuffer() };
 }
 
@@ -125,6 +160,8 @@ async function build() {
     const withPlay = els.optPlay.checked && !!manifest.bdplay;
     const withCam = els.optCam.checked && !!manifest.bdcam;
     const withCamUi = withCam && els.optCamUi.checked;
+    const withGateway = els.optGateway.checked && !!manifest.bdgw;
+    const withGatewayUi = withGateway && els.optGatewayUi.checked;
     // A rejected module is never dropped silently: the user chose it, so
     // building without it would ship something other than what they asked for.
     const bad = modules.filter((m) => m.error);
@@ -148,7 +185,8 @@ async function build() {
 
     tar.text('./authorized_keys', keyText + '\n', 0o600);
     tar.text('./build.conf', buildConf({
-      tag, withTailscale, withTailscaleUi, withKvm, withPlay, withCam, withCamUi, withModules, doReboot,
+      tag, withTailscale, withTailscaleUi, withKvm, withPlay, withCam, withCamUi,
+      withGateway, withGatewayUi, withModules, doReboot,
     }), 0o644);
 
     for (const rel of manifest.rootfsOverlay || []) {
@@ -246,6 +284,32 @@ async function build() {
       log('USB media player: skipped');
     }
 
+    if (withGateway) {
+      log('adding the streaming gateway…');
+      const src = els.mtxFile.files[0]
+        ? await readLocalMediaMTX(els.mtxFile.files[0])
+        : await fetchMediaMTX();
+      const mtx = await extractMediaMTX(src.buf);
+      log(`  mediamtx ${humanSize(mtx.mediamtx.length)}, aarch64 ELF`, 'ok');
+      tar.file('./userdata/bd-gw/mediamtx', mtx.mediamtx, 0o755);
+      if (mtx.license) tar.file('./userdata/bd-gw/LICENSE.mediamtx', mtx.license, 0o644);
+
+      const bdgw = await asset('assets/bdgw-linux-arm64');
+      if (bdgw.length !== manifest.bdgw.size) throw new Error('bdgw asset size mismatch');
+      if ((await sha256Hex(bdgw)) !== manifest.bdgw.sha256) {
+        throw new Error('bdgw asset SHA-256 mismatch');
+      }
+      tar.file('./userdata/bd-gw/bdgw', bdgw, 0o755);
+      tar.file('./userdata/bd-gw/run.sh', await asset('assets/gw-run.sh'), 0o755);
+      tar.file('./userdata/bd-gw/api-run.sh', await asset('assets/gw-api-run.sh'), 0o755);
+      log(`  bdgw ${humanSize(bdgw.length)}, sha256 verified — MediaMTX ${src.version} staged`, 'ok');
+      log(withGatewayUi
+        ? '  web UI tab: yes — videoset.html patched beside the UVC tab, BirdDogWebUI restarted with rollback'
+        : '  web UI tab: no — settings on port 8093 only');
+    } else {
+      log('streaming gateway: skipped');
+    }
+
     if (withModules) {
       log('adding custom modules — each install runs as root after the payloads above…');
       for (const { file, mod } of modules) {
@@ -290,6 +354,7 @@ async function init() {
   for (const id of [
     'key', 'tag', 'optTailscale', 'optKvm', 'optPlay', 'optReboot', 'tsFile',
     'optCam', 'optCamUi', 'camRow', 'modFiles', 'modList',
+    'optGateway', 'optGatewayUi', 'gatewayRow', 'mtxFile',
     'build', 'download', 'log', 'result', 'resultName', 'resultSize',
     'resultSha', 'kvmRow', 'playRow', 'playExtras', 'payloadInfo', 'keyHint',
   ]) {
@@ -302,6 +367,12 @@ async function init() {
       els.optCamUi.disabled = !els.optCam.checked;
     });
     els.optCamUi.disabled = !els.optCam.checked;
+  }
+  if (els.optGateway) {
+    els.optGateway.addEventListener('change', () => {
+      els.optGatewayUi.disabled = !els.optGateway.checked;
+    });
+    els.optGatewayUi.disabled = !els.optGateway.checked;
   }
   els.download.addEventListener('click', download);
   els.modFiles.addEventListener('change', modulesChosen);
@@ -336,6 +407,13 @@ async function init() {
     els.optPlay.disabled = true;
     els.playRow.classList.add('disabled');
     els.playRow.title = 'bdplay-linux-arm64 was not present when assets were built';
+  }
+  if (!manifest.bdgw) {
+    els.optGateway.checked = false;
+    els.optGateway.disabled = true;
+    els.optGatewayUi.disabled = true;
+    els.gatewayRow.classList.add('disabled');
+    els.gatewayRow.title = 'bdgw-linux-arm64 was not present when assets were built';
   }
   if (!manifest.bdcam) {
     els.optCam.checked = false;

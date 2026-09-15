@@ -1,15 +1,26 @@
 // birddog-play-fwgen — Worker half.
 //
 // The generator is a static page: it assembles the .fw in the browser and
-// nothing is uploaded. The only job here is proxying pkgs.tailscale.com, which
-// returns no Access-Control-Allow-Origin header, so the browser cannot fetch
-// the arm64 tarball directly.
+// nothing is uploaded. The only job here is proxying two release hosts that
+// return no Access-Control-Allow-Origin header, so the browser cannot fetch
+// the arm64 tarballs directly: pkgs.tailscale.com, and GitHub's release
+// downloads for MediaMTX (the streaming gateway's hub, 62 MB unpacked — far
+// over the 25 MiB static-asset cap, which is why it is fetched at all).
 //
-// Deliberately narrow: two routes, a hardcoded upstream host, and a strict
-// version pattern, so this cannot be used as a general open proxy.
+// Deliberately narrow: four routes, two hardcoded upstream hosts, a strict
+// version pattern for Tailscale and a single pinned version for MediaMTX, so
+// this cannot be used as a general open proxy.
 
 const UPSTREAM = 'https://pkgs.tailscale.com/stable/';
 const VERSION_RE = /^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,6}$/;
+
+// MediaMTX is pinned, not "latest": bd-play-stream-gateway renders a
+// configuration in MediaMTX's own key names and validates it in CI against
+// exactly this release, and birddog-re's fwbuild stages the same one. Bump
+// all three together.
+const MEDIAMTX_VERSION = 'v1.21.0';
+const MEDIAMTX_BASE = 'https://github.com/bluenviron/mediamtx/releases/download/';
+const mediamtxFile = (v) => `mediamtx_${v}_linux_arm64.tar.gz`;
 
 const CORS = {
   'access-control-allow-origin': '*',
@@ -68,6 +79,49 @@ async function tarball(url) {
   });
 }
 
+// The pinned MediaMTX release and the SHA-256 GitHub publishes beside it, so
+// the browser verifies what it packages rather than trusting this Worker or
+// the transport — the same arrangement as the Tailscale sidecar.
+async function mediamtxLatest() {
+  const v = MEDIAMTX_VERSION;
+  const file = mediamtxFile(v);
+  let sha256 = null;
+  const sc = await fetch(`${MEDIAMTX_BASE}${v}/checksums.sha256`, {
+    cf: { cacheTtl: 86400, cacheEverything: true },
+  });
+  if (sc.ok) {
+    for (const line of (await sc.text()).split('\n')) {
+      const m = line.trim().match(/^([0-9a-f]{64})\s+\*?(\S+)$/);
+      if (m && m[2] === file) sha256 = m[1];
+    }
+  }
+  return json({ version: v, file, sha256 });
+}
+
+async function mediamtxTarball(url) {
+  const v = url.searchParams.get('v') || '';
+  // Only the pinned release is ever served: there is nothing else the page
+  // could use, and a version parameter that reached upstream would be an
+  // open proxy over GitHub.
+  if (v !== MEDIAMTX_VERSION) return json({ error: 'unsupported version' }, 400);
+
+  const res = await fetch(`${MEDIAMTX_BASE}${v}/${mediamtxFile(v)}`, {
+    cf: { cacheTtl: 86400, cacheEverything: true },
+    redirect: 'follow',
+  });
+  if (!res.ok) return json({ error: `upstream ${res.status}` }, 502);
+
+  // Streamed straight through — ~29 MB compressed, never buffered here.
+  return new Response(res.body, {
+    headers: {
+      'content-type': 'application/x-compressed-tar',
+      'content-length': res.headers.get('content-length') || '',
+      'cache-control': 'public, max-age=86400',
+      ...CORS,
+    },
+  });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -84,6 +138,8 @@ export default {
 
     if (url.pathname === '/api/tailscale/latest') return latest();
     if (url.pathname === '/api/tailscale/tgz') return tarball(url);
+    if (url.pathname === '/api/mediamtx/latest') return mediamtxLatest();
+    if (url.pathname === '/api/mediamtx/tgz') return mediamtxTarball(url);
 
     return json({ error: 'not found' }, 404);
   },

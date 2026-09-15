@@ -64,6 +64,8 @@ jobs:
           cmp /tmp/x/update installer/update
           cmp /tmp/x/probe.sh installer/probe.sh
           cmp /tmp/x/userdata/birddog-kvm/run.sh installer/kvm-run.sh
+          cmp /tmp/x/userdata/bd-gw/run.sh installer/gw-run.sh
+          cmp /tmp/x/userdata/bd-gw/api-run.sh installer/gw-api-run.sh
           cmp /tmp/x/modules/citest-mod/install test/fixtures/module/install
           cmp /tmp/x/modules/citest-mod/payload/hello.txt test/fixtures/module/payload/hello.txt
 
@@ -72,6 +74,6 @@ jobs:
       # and belongs upstream where the installer is developed.
       - name: Shell payload must parse
         run: |
-          for f in installer/update installer/probe.sh installer/kvm-run.sh scripts/*.sh test/fixtures/module/install; do
+          for f in installer/update installer/probe.sh installer/kvm-run.sh installer/gw-run.sh installer/gw-api-run.sh scripts/*.sh test/fixtures/module/install; do
             bash -n "$f" && echo "ok  $f"
           done

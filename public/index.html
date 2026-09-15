@@ -11,7 +11,7 @@
 <main>
   <h1>BirdDog PLAY firmware package generator</h1>
   <p class="sub">Builds an installable <code>.fw</code> carrying an SSH key, Tailscale, an
-     NDI KVM endpoint, a USB media player, a UVC converter — and any
+     NDI KVM endpoint, a USB media player, a UVC converter, a streaming gateway — and any
      <a href="modules.html">modules of your own</a>. Everything is assembled in this browser —
      nothing is uploaded, and no existing firmware file is needed.</p>
 
@@ -138,6 +138,52 @@
           against the device's own GStreamer and <code>libndi</code>.</div>
       </div>
     </div>
+    <div class="opt" id="gatewayRow">
+      <input type="checkbox" id="optGateway">
+      <div>
+        <div class="t">Streaming gateway <span class="beta">beta</span></div>
+        <div class="d">RTMP, RTSP, HLS, WebRTC and UDP endpoints on the PLAY, in both directions.
+          <strong>In:</strong> push RTMP from OBS or an encoder to
+          <code>rtmp://&lt;play&gt;:1935/live</code>, pull an RTSP camera or an HLS playlist,
+          publish WHIP from a browser, receive MPEG-TS or RTP over UDP — and put any of it on the
+          HDMI output. <strong>Out:</strong> serve the UVC converter's camera over RTSP, RTMP,
+          HLS, WebRTC and SRT, and push it to YouTube, Twitch or any RTMP(S), RTSP, SRT or WHIP
+          destination. Settings live in a <strong>Streaming</strong> tab in the web UI.
+          <br>
+          The box runs <a href="https://github.com/bluenviron/mediamtx">MediaMTX</a> as the hub;
+          the picture reaches the screen through <strong>the PLAY's own decoder</strong>, which is
+          pointed at the chosen path as an SRT source on loopback — the three files the stock AV
+          Setup page writes, plus a restart. Nothing takes the display, so the OSD, tally and web
+          UI stay as they are, and if the hub dies the PLAY behaves like a PLAY.
+          <br>
+          <strong>Why beta:</strong> this one has <strong>not yet run on a PLAY</strong>. Everything
+          it relies on is read out of the firmware or measured by the projects beside it, and its
+          configuration is validated against the real MediaMTX in CI — but the edge the whole
+          inbound side rests on, the PLAY's decoder reading MediaMTX's SRT over loopback, is
+          untested until the test unit is back. The decode ceilings are the chip's: H.264 to
+          1080p60 or 2160p30, HEVC to 2160p60; WebRTC publishers must send H.264. YouTube refuses
+          video without audio, and the UVC converter has none yet.
+          <br>
+          <strong>Ports 1935, 8554, 8888, 8889 and 8890/udp open with no credentials</strong> —
+          the LAN or the tailnet is the boundary, exactly as for the stock API on
+          <code>:8080</code>. The tab itself is gated on your birdUI login, because it holds
+          stream keys. Adds about 29 MB to the package; 62 MB on the device.
+          <br>
+          <label style="display:block;margin-top:6px;">
+            <input type="checkbox" id="optGatewayUi" checked>
+            Add the <strong>Streaming</strong> tab to the web UI. Same edit of
+            <code>videoset.html</code> as the UVC Converter tab, anchored beside it so the two
+            coexist in either order; marker-wrapped, backed up, <code>bdgw --unpatch-ui</code>
+            restores it, and the installer restarts <code>BirdDogWebUI</code>, checks it came
+            back as a new process, and rolls back if it did not. Without this the gateway still
+            runs; its settings are just on port 8093 rather than in the UI.
+          </label>
+        </div>
+        <div class="src">Source: <a href="https://github.com/stoatworks-labs/bd-play-stream-gateway">stoatworks-labs/bd-play-stream-gateway</a> (MIT) — Go;
+          the hub is <a href="https://github.com/bluenviron/mediamtx">bluenviron/mediamtx</a> (MIT),
+          fetched here at build time and checked against its published SHA-256.</div>
+      </div>
+    </div>
     <div class="opt">
       <input type="checkbox" id="optReboot">
       <div>
@@ -157,6 +203,13 @@
     <p class="hint">Leave empty to fetch the current stable arm64 release and verify it against
        the published SHA-256. Supply <code>tailscale_&lt;version&gt;_arm64.tgz</code> yourself to
        pin a version or build offline.</p>
+
+    <label class="field" for="mtxFile">MediaMTX tarball (optional)</label>
+    <input type="file" id="mtxFile" accept=".gz,.tgz,application/gzip">
+    <p class="hint">Only used with the streaming gateway. Leave empty to fetch the pinned release
+       and verify it against the <code>checksums.sha256</code> GitHub publishes beside it. Supply
+       <code>mediamtx_v&lt;version&gt;_linux_arm64.tar.gz</code> yourself to build offline — the
+       gateway's configuration is written for the pinned version, so another may not load it.</p>
 
     <label class="field" for="modFiles">Custom modules (optional)</label>
     <input type="file" id="modFiles" multiple accept=".tgz,.tar.gz,.tar,application/gzip,application/x-tar,application/x-gzip">
@@ -213,6 +266,11 @@
      it shipped. A pristine copy is also kept beside it as
      <code>settings.html.bdts-stock</code>, and <code>bdts --restore-ui</code> restores from
      that.</p>
+  <p class="note">The streaming gateway: clear <em>Show on HDMI</em> in its tab first, so the
+     decoder is handed back, then
+     <code>/userdata/bd-gw/bdgw --unpatch-ui &amp;&amp; systemctl restart BirdDogWebUI</code>,
+     <code>systemctl disable --now bd-mtx bd-gw</code>, and
+     <code>rm -rf /userdata/bd-gw /etc/systemd/system/bd-{mtx,gw}.service</code>.</p>
   <p class="note">A custom module built from the template leaves its own
      <code>uninstall</code> beside its payload: <code>bash /userdata/bd-&lt;name&gt;/uninstall</code>.
      One without it is whatever its author documented — <code>/userdata/bd-modules.log</code>
@@ -226,7 +284,8 @@
     <p>No firmware is uploaded and nothing is decrypted here: a valid package is simply a gzip'd
        tar with an executable <code>update</code> at the top level, so the generator needs neither
        your firmware file nor any vendor key. The only server-side component is a proxy for
-       <code>pkgs.tailscale.com</code>, which serves no CORS header.</p>
+       <code>pkgs.tailscale.com</code> and, for the streaming gateway, GitHub's release downloads
+       of MediaMTX — neither serves a CORS header.</p>
     <p><strong>Read the installer before you run it.</strong> It runs as root on your device and
        it is 500 lines of commented bash — you should not take anyone's word for what it does:
        <a href="https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/installer/update">installer/update</a>.
@@ -236,8 +295,10 @@
        <a href="https://github.com/stoatworks-labs/bd-play-usb-player">github.com/stoatworks-labs/bd-play-usb-player</a>,
        the UVC converter at
        <a href="https://github.com/stoatworks-labs/bdcam">github.com/stoatworks-labs/bdcam</a>,
-       and the birdUI Tailscale panel at
-       <a href="https://github.com/stoatworks-labs/bdts">github.com/stoatworks-labs/bdts</a> (all MIT).
+       the birdUI Tailscale panel at
+       <a href="https://github.com/stoatworks-labs/bdts">github.com/stoatworks-labs/bdts</a>,
+       and the streaming gateway at
+       <a href="https://github.com/stoatworks-labs/bd-play-stream-gateway">github.com/stoatworks-labs/bd-play-stream-gateway</a> (all MIT).
        Want to add your own? <a href="modules.html">Building a module</a> explains the format the
        installer runs, and
        <a href="https://github.com/stoatworks-labs/bd-play-module-template">bd-play-module-template</a>
@@ -248,6 +309,11 @@
        licence</a>, © Tailscale Inc. &amp; AUTHORS. The KVM agent loads the device's existing
        NDI runtime at run time and redistributes none of it; NDI® is a registered trademark of
        Vizrt Group.</p>
+    <p>Choosing the streaming gateway redistributes the official
+       <a href="https://github.com/bluenviron/mediamtx">MediaMTX</a> arm64 binary, unmodified,
+       under the <a href="https://github.com/bluenviron/mediamtx/blob/main/LICENSE">MIT
+       licence</a>, © its authors; its LICENSE file travels in the package as
+       <code>/userdata/bd-gw/LICENSE.mediamtx</code>.</p>
     <p>Choosing the USB media player also redistributes two more unmodified upstream binaries.
        <a href="https://pdfium.googlesource.com/pdfium/">PDFium</a> renders PDF pages, under the
        <a href="https://pdfium.googlesource.com/pdfium/+/refs/heads/main/LICENSE">BSD-3-Clause

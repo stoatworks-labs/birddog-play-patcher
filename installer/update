@@ -29,6 +29,8 @@ WITH_KVM="${WITH_KVM:-0}"
 WITH_CAM="${WITH_CAM:-0}"
 WITH_CAM_UI="${WITH_CAM_UI:-0}"
 WITH_PLAY="${WITH_PLAY:-0}"
+WITH_GATEWAY="${WITH_GATEWAY:-0}"
+WITH_GATEWAY_UI="${WITH_GATEWAY_UI:-0}"
 WITH_MODULES="${WITH_MODULES:-0}"
 DO_REBOOT="${DO_REBOOT:-0}"
 
@@ -382,6 +384,107 @@ EOF
   log "bdplay unit written"
 fi
 
+# ------------------------------------------------------- streaming gateway
+# MediaMTX as a protocol hub (RTMP, RTSP, HLS, WebRTC, SRT, UDP in and out),
+# with bdgw rendering its configuration and adding a Streaming tab. The picture
+# reaches HDMI through PPApp's own SRT receiver on loopback — nothing takes the
+# display, and the OSD, tally and web UI stay in charge. Same rules as every
+# other payload: everything under /userdata, self-supervised, nothing on the
+# recovery path touched. Source: github.com/stoatworks-labs/bd-play-stream-gateway.
+if [ "$WITH_GATEWAY" = 1 ] && [ -d "$SDIR/userdata/bd-gw" ]; then
+  NEED_KB=$(du -sk "$SDIR/userdata/bd-gw" | awk '{print $1}')
+  if [ -n "$FREE_KB" ] && [ "$FREE_KB" -lt $((NEED_KB + 51200)) ]; then
+    log "SKIPPING the streaming gateway: needs ${NEED_KB} KB + 50 MB headroom, only ${FREE_KB} KB free"
+  else
+    log "installing the streaming gateway (${NEED_KB} KB) to /userdata/bd-gw"
+    mkdir -p /userdata/bd-gw
+    cp -f "$SDIR/userdata/bd-gw/mediamtx"   /userdata/bd-gw/
+    cp -f "$SDIR/userdata/bd-gw/bdgw"       /userdata/bd-gw/
+    cp -f "$SDIR/userdata/bd-gw/run.sh"     /userdata/bd-gw/
+    cp -f "$SDIR/userdata/bd-gw/api-run.sh" /userdata/bd-gw/
+    chmod 755 /userdata/bd-gw/mediamtx /userdata/bd-gw/bdgw /userdata/bd-gw/run.sh /userdata/bd-gw/api-run.sh
+    chown -R root:root /userdata/bd-gw
+    # config.json is never shipped: bdgw writes the defaults on first start,
+    # and an existing one survives a reinstall — it is how the box is set up.
+
+    cat > /etc/systemd/system/bd-mtx.service <<'EOF'
+[Unit]
+Description=BirdDog PLAY streaming gateway — MediaMTX (custom)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/userdata/bd-gw
+ExecStart=/userdata/bd-gw/run.sh
+# run.sh exits 0 when the gateway is switched off in config.json; restarting
+# on a timer is how switching it on is picked up without a udev rule or a
+# second daemon.
+Restart=always
+RestartSec=10
+# MediaMTX closes its listeners cleanly on SIGTERM.
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # 8093 because 8080 is BirdDog's API, 8090 is bd-cam-api, 8091 is bd-play
+    # and 8092 is bd-tailscale-ui. A collision is silent: the second service
+    # to start fails to bind and its tab simply never answers.
+    cat > /etc/systemd/system/bd-gw.service <<'EOF'
+[Unit]
+Description=BirdDog PLAY streaming gateway panel (custom)
+After=network.target BirdDogWebUI.service bd-mtx.service
+
+[Service]
+WorkingDirectory=/userdata/bd-gw
+ExecStart=/userdata/bd-gw/api-run.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    log "gateway units written (bd-mtx, bd-gw)"
+    GW_INSTALLED=1
+  fi
+fi
+
+# ------------------------------------------------- web UI "Streaming" tab
+# videoset.html again — bdcam's UVC tab and bdplay's USB entry patch the same
+# file, each with its own markers, and bdgw anchors where bdcam does so the
+# tabs sit side by side whichever went first. Same discipline: the patch is
+# unit tested in bd-play-stream-gateway, refuses unfamiliar markup and is
+# exactly reversible; the health check and rollback here are the second line.
+if [ "${GW_INSTALLED:-0}" = 1 ] && [ "$WITH_GATEWAY_UI" = 1 ] && [ -x /userdata/bd-gw/bdgw ]; then
+  WEBUI_UNIT=BirdDogWebUI
+  if ! systemctl cat "$WEBUI_UNIT" >/dev/null 2>&1; then
+    log "WARNING: no $WEBUI_UNIT unit on this firmware — skipping the Streaming tab"
+  elif /userdata/bd-gw/bdgw --patch-ui --ui-dir /srv/birddog-web-ui --api-port 8093 >> /tmp/bd-custom-install.log 2>&1; then
+    PID_BEFORE=$(pidof birddog-web-ui 2>/dev/null | awk '{print $1}')
+    log "AV Setup page patched; restarting $WEBUI_UNIT (was pid ${PID_BEFORE:-none})"
+    systemctl restart "$WEBUI_UNIT" 2>/dev/null
+    sleep 5
+    PID_AFTER=$(pidof birddog-web-ui 2>/dev/null | awk '{print $1}')
+    CODE=$(curl -s -o /dev/null -m 8 -w '%{http_code}' http://127.0.0.1/login 2>/dev/null || echo 000)
+    # It must answer AND be a different process: an unchanged pid means the
+    # template was never re-read, so an HTTP 200 is answered by the process
+    # that never reloaded.
+    if [ -n "$PID_AFTER" ] && [ "$PID_AFTER" != "$PID_BEFORE" ] && { [ "$CODE" = 200 ] || [ "$CODE" = 302 ] || [ "$CODE" = 301 ]; }; then
+      log "web UI healthy after patch (pid ${PID_BEFORE:-none} -> $PID_AFTER, HTTP $CODE) — Streaming tab is live"
+    else
+      log "WARNING: web UI unhealthy after patching (pid ${PID_BEFORE:-none} -> ${PID_AFTER:-none}, HTTP $CODE) — ROLLING BACK"
+      /userdata/bd-gw/bdgw --unpatch-ui --ui-dir /srv/birddog-web-ui >> /tmp/bd-custom-install.log 2>&1
+      systemctl restart "$WEBUI_UNIT" 2>/dev/null
+      sleep 5
+      log "after rollback: HTTP $(curl -s -o /dev/null -m 8 -w '%{http_code}' http://127.0.0.1/login 2>/dev/null || echo 000); page as found also at /srv/birddog-web-ui/videoset.html.bdgw-stock"
+    fi
+  else
+    log "WARNING: could not patch the AV Setup page — left untouched"
+  fi
+fi
+
 # -------------------------------------------------------------------- rootfs
 if [ -d "$SDIR/files" ]; then
   log "copying rootfs overlay"
@@ -486,6 +589,16 @@ if [ -f /etc/systemd/system/bd-cam-api.service ]; then
   systemctl restart bd-cam-api.service 2>/dev/null && log "bd-cam-api started on :8090" \
     || log "WARNING: bd-cam-api failed to start — check 'journalctl -u bd-cam-api'"
 fi
+if [ -f /etc/systemd/system/bd-mtx.service ]; then
+  systemctl enable bd-mtx.service 2>/dev/null
+  systemctl restart bd-mtx.service 2>/dev/null && log "bd-mtx started (MediaMTX)" \
+    || log "WARNING: bd-mtx failed to start — check 'journalctl -u bd-mtx'"
+fi
+if [ -f /etc/systemd/system/bd-gw.service ]; then
+  systemctl enable bd-gw.service 2>/dev/null
+  systemctl restart bd-gw.service 2>/dev/null && log "bd-gw started on :8093" \
+    || log "WARNING: bd-gw failed to start — check 'journalctl -u bd-gw'"
+fi
 
 # --------------------------------------------------- restore stock services
 # /bin/birddog-update-wrapper does `systemctl stop BirdDogRunner` before calling
@@ -513,6 +626,11 @@ if [ "${TS_INSTALLED:-0}" = 1 ]; then
     log "tailscale is installed but NOT authenticated — ssh in on port 9031 and run:"
   fi
   log "  /userdata/tailscale/tailscale --socket=/run/bd-tailscaled.sock up"
+fi
+
+if [ "${GW_INSTALLED:-0}" = 1 ]; then
+  log "streaming gateway: publish to rtmp://<this-device>:1935/live, then pick it on the Streaming tab"
+  log "  ports 1935 8554 8888 8889 8890/udp are open with no credentials — the LAN is the boundary"
 fi
 
 if [ "$DO_REBOOT" = 1 ]; then

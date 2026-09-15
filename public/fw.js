@@ -265,6 +265,28 @@ export async function extractTailscale(buf) {
   return wanted;
 }
 
+/**
+ * Pull the `mediamtx` binary out of a MediaMTX release tarball. The tarball is
+ * flat — mediamtx, mediamtx.yml and LICENSE at the top level — but a leading
+ * "./" or a version directory is tolerated, the same way extractTailscale
+ * tolerates the tarball's own top-level directory.
+ * @returns {Promise<{ mediamtx: Uint8Array, license: Uint8Array|null }>}
+ */
+export async function extractMediaMTX(buf) {
+  let mediamtx = null;
+  let license = null;
+  for (const e of parseTar(await gunzip(buf))) {
+    const base = e.name.replace(/^\.\//, '').split('/').pop();
+    if (base === 'mediamtx') mediamtx = e.data;
+    if (base === 'LICENSE') license = e.data;
+  }
+  if (!mediamtx) throw new Error('that tarball does not contain a mediamtx binary');
+  if (!isArm64Elf(mediamtx)) {
+    throw new Error('mediamtx in that tarball is not an aarch64 ELF — wrong architecture');
+  }
+  return { mediamtx, license };
+}
+
 /** ELF magic, EI_CLASS=2 (64-bit), e_machine 0xB7 (AArch64) little-endian at +18. */
 export function isArm64Elf(d) {
   return (
@@ -293,6 +315,7 @@ export const MODULE_VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,31}$/;
 // Names whose /userdata/bd-<name> or unit would collide with a built-in payload.
 export const RESERVED_MODULE_NAMES = new Set([
   'tailscale', 'tailscale-ui', 'kvm', 'cam', 'cam-api', 'play', 'probe', 'modules',
+  'gateway', 'gw', 'mtx',
 ]);
 // The updater extracts the whole package into a temp dir on the device before
 // running anything. 68 MB of Tailscale is proven; this is a ceiling, not a budget.
@@ -455,7 +478,8 @@ export function addModule(tar, mod) {
 }
 
 export function buildConf({
-  tag, withTailscale, withTailscaleUi, withKvm, withPlay, withCam, withCamUi, withModules, doReboot,
+  tag, withTailscale, withTailscaleUi, withKvm, withPlay, withCam, withCamUi,
+  withGateway, withGatewayUi, withModules, doReboot,
 }) {
   return (
     `BUILD_TAG=${tag}\n` +
@@ -465,6 +489,8 @@ export function buildConf({
     `WITH_PLAY=${withPlay ? 1 : 0}\n` +
     `WITH_CAM=${withCam ? 1 : 0}\n` +
     `WITH_CAM_UI=${withCam && withCamUi ? 1 : 0}\n` +
+    `WITH_GATEWAY=${withGateway ? 1 : 0}\n` +
+    `WITH_GATEWAY_UI=${withGateway && withGatewayUi ? 1 : 0}\n` +
     `WITH_MODULES=${withModules ? 1 : 0}\n` +
     `DO_REBOOT=${doReboot ? 1 : 0}\n`
   );

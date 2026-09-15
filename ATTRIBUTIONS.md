@@ -30,6 +30,16 @@ Not vendored and not bundled in the repo. The official static arm64 release tarb
 
 It is what puts a device on a tailnet, and the official static build has no library dependencies at all — which is what makes it installable on a locked-down appliance rootfs without touching anything else.
 
+### MediaMTX
+
+<https://github.com/bluenviron/mediamtx>  
+Licence: MIT  
+Copyright: aler9 (Copyright (c) 2019) and the MediaMTX contributors
+
+Not vendored and not bundled in the repo. The official static linux/arm64 release tarball of one pinned version is fetched at build time, verified against the checksums.sha256 GitHub publishes beside it, and its mediamtx binary is placed inside the firmware package the user downloads, with the tarball's LICENSE file next to it. That is a binary redistribution, so the MIT notice travels with it.
+
+It is the protocol hub the streaming gateway is built on — RTMP, RTSP, HLS, WebRTC, SRT and UDP in and out, remuxing rather than transcoding — so the PLAY gains every one of those endpoints without a streaming stack of its own, and the picture can still go through the device's own decoder over SRT on loopback.
+
 ### purego
 
 <https://github.com/ebitengine/purego>  

@@ -9,10 +9,13 @@
 > firmwares in the field.
 
 Builds an installable `.fw` for a [BirdDog PLAY](https://birddog.tv) that adds an SSH key,
-[Tailscale](https://tailscale.com), an NDI KVM endpoint, and a
-[USB media player](https://github.com/stoatworks-labs/bd-play-usb-player) — so a PLAY can be reached and
-managed remotely, can drive the machine it is displaying, and can play video, stills and PDFs
-off a USB stick. It also takes **modules of your own**: a `.tgz` with an `install` script that the
+[Tailscale](https://tailscale.com), an NDI KVM endpoint, a
+[USB media player](https://github.com/stoatworks-labs/bd-play-usb-player), a
+[UVC converter](https://github.com/stoatworks-labs/bdcam) and a
+[streaming gateway](https://github.com/stoatworks-labs/bd-play-stream-gateway) — so a PLAY can be
+reached and managed remotely, can drive the machine it is displaying, can play video, stills
+and PDFs off a USB stick, can turn a USB camera into NDI, and can take RTMP, RTSP, HLS, WebRTC
+and UDP streams onto its HDMI output and send that camera back out the same ways. It also takes **modules of your own**: a `.tgz` with an `install` script that the
 package's installer runs on the device next to those payloads — see
 [Custom modules](#custom-modules).
 
@@ -62,6 +65,8 @@ It ships only code written for this project.
 | `/userdata/tailscale/` | `tailscaled` + `tailscale`, 68 MB | expected, but not guaranteed |
 | `/userdata/bd-kvm/` | `bdkvm` + `run.sh` | yes — deliberately not `/userdata/birddog-kvm`, which the vendor updater deletes |
 | `/etc/systemd/system/bd-{tailscaled,kvm}.service` | units | yes |
+| `/userdata/bd-gw/` | streaming gateway (beta): `mediamtx` 62 MB, `bdgw`, its `config.json` | expected, but not guaranteed |
+| `/etc/systemd/system/bd-{mtx,gw}.service` | gateway units | yes |
 | `/userdata/bd-probe.txt` | first-boot hardware report | yes |
 | `/userdata/bd-modules.log` | one line per custom module the installer ran | yes |
 
@@ -108,6 +113,29 @@ coexists with the PLAY's own receiver.
 It uses the **free NDI SDK only**, and `dlopen`s the device's existing `libndi` at runtime
 rather than linking it — so no NDI code is redistributed here.
 
+## Streaming gateway (beta)
+
+[bd-play-stream-gateway](https://github.com/stoatworks-labs/bd-play-stream-gateway) puts
+[MediaMTX](https://github.com/bluenviron/mediamtx) on the box as a protocol hub — RTMP, RTSP,
+HLS, WebRTC/WHIP, SRT and UDP in; RTSP, RTMP, HLS, WebRTC and SRT served; RTMP(S), RTSP, SRT
+and WHIP pushed out — and adds a **Streaming** tab to the web UI. The picture reaches HDMI
+through **the PLAY's own decoder**: the tab points it at the chosen path as an SRT source on
+loopback, with the three files the stock AV Setup page writes plus a restart, so the OSD,
+tally and web UI stay in charge and a dead hub just leaves a PLAY behaving like a PLAY. Point
+the UVC converter's SRT output at `srt://127.0.0.1:8890?streamid=publish:cam` and the camera
+is on every protocol the hub speaks.
+
+MediaMTX is 62 MB unpacked — over the 25 MiB static-asset cap — so the page fetches the
+**pinned** release through the Worker (GitHub's release host sends no CORS header, like
+`pkgs.tailscale.com`) and checks it against the `checksums.sha256` published beside it. The
+pin lives in [`src/worker.js`](src/worker.js); the gateway repo validates its rendered
+configuration against exactly that version in CI, and birddog-re's `fwbuild` stages the same
+one — bump all three together.
+
+**Not yet run on a PLAY.** Ports 1935, 8554, 8888, 8889 and 8890/udp open with no credentials,
+exactly like the stock API on `:8080`. Read the gateway repo's README for the ceilings (H.264
+to 1080p60/2160p30, HEVC to 2160p60; WebRTC must send H.264) and the hardware list.
+
 ## Custom modules
 
 The four payloads above are modules in everything but packaging, and the generator now takes
@@ -139,6 +167,7 @@ accept what it produces. The CLI builder in the research repo takes the same arc
 scripts/build-assets.sh      # assemble public/assets/ from installer/ and agent/dist/
 npx wrangler dev             # serve locally
 node test/build-package.mjs  # build a package in Node and verify its structure
+MTX_TGZ=/path/to/mediamtx_v1.21.0_linux_arm64.tar.gz node test/build-package.mjs   # offline
 node test/modules.mjs        # read module archives written by the system tar
 ```
 

@@ -11,6 +11,7 @@ npx wrangler dev --port 8792     # serve the page + the tailscale proxy
 node test/build-package.mjs      # build a package in Node, verify structure
 node test/modules.mjs            # module archives written by the system tar must read and refuse right
 TS_TGZ=/path/to/tailscale_x_arm64.tgz node test/build-package.mjs   # offline
+MTX_TGZ=/path/to/mediamtx_vX_linux_arm64.tar.gz node test/build-package.mjs   # offline, the gateway half
 scripts/sync-from-re.sh [path]   # pull installer/agent from the research repo; exits 1 on change
 agent/build.sh                   # rebuild bdkvm for linux/arm64 (needs Go + a cross toolchain)
 ```
