@@ -159,7 +159,7 @@ check(utf8.files.some((f) => f.path === 'payload/héllo-wörld.txt'), `non-ASCII
     return h;
   };
   const pad = (n) => new Uint8Array((512 - (n % 512)) % 512);
-  const g = new TextEncoder().encode('16 path=module\n'); // 16 bytes exactly
+  const g = new TextEncoder().encode('15 path=module\n'); // 15 bytes, newline included
   const body = new TextEncoder().encode('NAME=g\nVERSION=1\n');
   const archive = new Uint8Array(await new Blob([
     gnuHdr('pax_global_header', g.length, 'g'), g, pad(g.length),
@@ -167,6 +167,27 @@ check(utf8.files.some((f) => f.path === 'payload/héllo-wörld.txt'), `non-ASCII
     new Uint8Array(1024),
   ]).arrayBuffer());
   await refuses(readModule(archive, 'global.tar'), /global pax path override/, 'global pax path override refused');
+
+  // Mis-framed records are refused, never applied: a declared length past the
+  // payload, a record without its newline, a length that is not a number.
+  const enc = (s) => new TextEncoder().encode(s);
+  for (const [label, bad] of [
+    ['length past the payload', enc('99 path=x\n')],
+    ['no terminating newline', enc('14 path=module')],
+    ['non-numeric length', enc('ab path=module\n')],
+    ['length one over the record', enc('16 path=module\n')],
+  ]) {
+    let threw = false;
+    try { paxRecords(bad); } catch { threw = true; }
+    check(threw, `pax record refused: ${label}`);
+  }
+  const x = enc('16 path=module\n'); // 15 bytes declared as 16
+  const arch = new Uint8Array(await new Blob([
+    gnuHdr('PaxHeader/x', x.length, 'x'), x, pad(x.length),
+    gnuHdr('module.conf', body.length, '0'), body, pad(body.length),
+    new Uint8Array(1024),
+  ]).arrayBuffer());
+  await refuses(readModule(arch, 'badpax.tar'), /badpax\.tar: malformed pax header record/, 'mis-framed pax record refuses the archive');
 }
 
 console.log('\nsize ceiling:');

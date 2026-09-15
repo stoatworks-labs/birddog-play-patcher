@@ -171,7 +171,13 @@ export function tarEntries(buf) {
   return out;
 }
 
-/** The key=value records of one pax header, split on byte lengths. */
+/**
+ * The key=value records of one pax header, split on byte lengths. Each record
+ * is "<len> key=value\n" with <len> the byte count of the whole record, newline
+ * included. Anything that does not frame that way is refused: this is the
+ * archive gate, and a record that misdeclares its length would rename the
+ * member after it.
+ */
 export function paxRecords(bytes) {
   const dec = new TextDecoder();
   const out = {};
@@ -179,8 +185,11 @@ export function paxRecords(bytes) {
   while (p < bytes.length) {
     let sp = p;
     while (sp < bytes.length && bytes[sp] !== 0x20) sp++;
-    const len = parseInt(dec.decode(bytes.subarray(p, sp)), 10);
-    if (!len || len <= sp - p + 1) break; // malformed: stop rather than loop
+    const lenText = dec.decode(bytes.subarray(p, sp));
+    const len = /^[1-9][0-9]*$/.test(lenText) ? parseInt(lenText, 10) : 0;
+    if (!len || len <= sp - p + 1 || p + len > bytes.length || bytes[p + len - 1] !== 0x0a) {
+      throw new Error('malformed pax header record');
+    }
     const rec = dec.decode(bytes.subarray(sp + 1, p + len - 1)); // drop the trailing \n
     const eq = rec.indexOf('=');
     if (eq > 0) out[rec.slice(0, eq)] = rec.slice(eq + 1);
@@ -343,7 +352,13 @@ export async function readModule(buf, label = 'module', { maxBytes = MODULE_MAX_
   // an absolute name can never place anything outside the module.
   const junk = (p) => /(^|\/)(\._[^/]*|\.DS_Store|__MACOSX(\/.*)?|PaxHeaders?(\.\d+)?\/.*)$/.test(p);
   const entries = [];
-  for (const e of tarEntries(bytes)) {
+  let members;
+  try {
+    members = tarEntries(bytes);
+  } catch (err) {
+    throw new Error(`${label}: ${err.message}`);
+  }
+  for (const e of members) {
     let p = e.name.replace(/^(\.\/|\/)+/, '').replace(/\/+$/, '');
     if (!p || p === '.') continue;
     if (p.split('/').includes('..')) throw new Error(`${label}: path escapes the archive: ${e.name}`);
