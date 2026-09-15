@@ -12,7 +12,9 @@ Builds an installable `.fw` for a [BirdDog PLAY](https://birddog.tv) that adds a
 [Tailscale](https://tailscale.com), an NDI KVM endpoint, and a
 [USB media player](https://github.com/stoatworks-labs/bd-play-usb-player) — so a PLAY can be reached and
 managed remotely, can drive the machine it is displaying, and can play video, stills and PDFs
-off a USB stick.
+off a USB stick. It also takes **modules of your own**: a `.tgz` with an `install` script that the
+package's installer runs on the device next to those payloads — see
+[Custom modules](#custom-modules).
 
 **Live: <https://birddog-play-patcher.stoatworks-labs.com>**
 
@@ -61,6 +63,7 @@ It ships only code written for this project.
 | `/userdata/bd-kvm/` | `bdkvm` + `run.sh` | yes — deliberately not `/userdata/birddog-kvm`, which the vendor updater deletes |
 | `/etc/systemd/system/bd-{tailscaled,kvm}.service` | units | yes |
 | `/userdata/bd-probe.txt` | first-boot hardware report | yes |
+| `/userdata/bd-modules.log` | one line per custom module the installer ran | yes |
 
 Everything substantial lives on the `/userdata` partition. The installer:
 
@@ -71,7 +74,7 @@ Everything substantial lives on the `/userdata` partition. The installer:
   bad install cannot break the boot chain;
 - is idempotent, and does not reboot unless you ask it to.
 
-Read [`installer/update`](installer/update) before you run it. It is 200 lines of commented
+Read [`installer/update`](installer/update) before you run it. It is 500 lines of commented
 bash, it runs as root on your device, and you should not take anyone's word for what it does.
 
 ## Tailscale
@@ -105,18 +108,45 @@ coexists with the PLAY's own receiver.
 It uses the **free NDI SDK only**, and `dlopen`s the device's existing `libndi` at runtime
 rather than linking it — so no NDI code is redistributed here.
 
+## Custom modules
+
+The four payloads above are modules in everything but packaging, and the generator now takes
+yours. A **module** is a directory — `module.conf` (`NAME`, `VERSION`), an executable `install`,
+whatever payload it needs — shipped as a `.tgz`. Choose it under *Custom modules*; the page reads
+it in the browser, checks its structure, and writes it into the `.fw` at `modules/<name>/`. On the
+device, `update` runs each `modules/*/install` as root, from that directory, after its own
+payloads.
+
+What the installer guarantees around a module is what makes this safe to offer: each runs in a
+subshell, under `timeout 600` where the command exists, and a non-zero exit is logged and skipped
+— so a broken module can never stop the `BirdDogRunner` restore at the end, which is what brings
+the picture back. The page refuses what the format cannot carry (paths over ustar's 100 bytes,
+symlinks, a non-aarch64 ELF, a name that collides with a built-in payload) and checks **nothing**
+about what `install` does. That is the author's business, and the page says so.
+
+The contract — environment, `bd_log`, the rules that keep a unit recoverable — is written up at
+[`/modules.html`](https://birddog-play-patcher.stoatworks-labs.com/modules.html), and
+[bd-play-module-template](https://github.com/stoatworks-labs/bd-play-module-template) is a
+complete working module to start from, with a `build.sh` and CI that prove the generator will
+accept what it produces. The CLI builder in the research repo takes the same archives with
+`--module`, so the two builders cannot disagree about what a valid module is.
+
 ## Development
 
 ```bash
 scripts/build-assets.sh      # assemble public/assets/ from installer/ and agent/dist/
 npx wrangler dev             # serve locally
 node test/build-package.mjs  # build a package in Node and verify its structure
+node test/modules.mjs        # read module archives written by the system tar
 ```
 
 `public/fw.js` holds the archive logic and is deliberately free of DOM and network calls, so
 the Node test exercises the exact module the browser runs rather than a reimplementation. The
 test asserts that the `update` inside a generated package is byte-identical to
-[`installer/update`](installer/update) in this repo.
+[`installer/update`](installer/update) in this repo, and carries a fixture module packed by the
+**system** tar — GNU tar in CI, bsdtar on a Mac — so the module reader is checked against what
+real tar programs emit (pax headers, GNU long names, ustar prefixes) rather than against
+`fw.js` writing for itself.
 
 **The tar layer is reproducible; the `.fw` is not.** Identical inputs produce a byte-identical
 tar in both Chrome and Node, but the two engines configure zlib differently, so the same tar

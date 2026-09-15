@@ -25,6 +25,11 @@ jobs:
       - name: Build a package and check its structure
         run: node test/build-package.mjs
 
+      # Module archives come from other people's tar programs. GNU tar here is
+      # the one a Mac cannot supply, so the GNU long-name path gets its real test.
+      - name: Read module archives written by the system tar
+        run: node test/modules.mjs
+
       # public/fw.js agreeing with itself proves nothing — GNU tar and Python's
       # strict tarfile are the independent readers.
       - name: GNU tar must accept the package
@@ -40,11 +45,13 @@ jobs:
           for name, m in members.items():
               if m.uid or m.gid or m.uname != 'root' or m.gname != 'root':
                   bad.append(f'{name}: owned by {m.uname}:{m.gname} ({m.uid}:{m.gid})')
-          for name in ('./update', './probe.sh'):
+          for name in ('./update', './probe.sh', './modules/citest-mod/install'):
               if oct(members[name].mode) != '0o755':
                   bad.append(f'{name}: mode {oct(members[name].mode)}, expected 0o755')
           if oct(members['./authorized_keys'].mode) != '0o600':
               bad.append('./authorized_keys is not 0600')
+          if oct(members['./modules/citest-mod/module.conf'].mode) != '0o644':
+              bad.append('./modules/citest-mod/module.conf is not 0644')
           if bad:
               print('\n'.join(bad)); sys.exit(1)
           print(f'{len(members)} members, all root-owned with the expected modes')
@@ -57,12 +64,14 @@ jobs:
           cmp /tmp/x/update installer/update
           cmp /tmp/x/probe.sh installer/probe.sh
           cmp /tmp/x/userdata/birddog-kvm/run.sh installer/kvm-run.sh
+          cmp /tmp/x/modules/citest-mod/install test/fixtures/module/install
+          cmp /tmp/x/modules/citest-mod/payload/hello.txt test/fixtures/module/payload/hello.txt
 
       # Syntax only. The payload runs as root on someone's device, so a parse
       # error must never reach a release; deeper linting is a separate concern
       # and belongs upstream where the installer is developed.
       - name: Shell payload must parse
         run: |
-          for f in installer/update installer/probe.sh installer/kvm-run.sh scripts/*.sh; do
+          for f in installer/update installer/probe.sh installer/kvm-run.sh scripts/*.sh test/fixtures/module/install; do
             bash -n "$f" && echo "ok  $f"
           done

@@ -1,14 +1,14 @@
 {
   "name": "birddog-play-patcher",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Builds an installable firmware package for a BirdDog PLAY entirely in the browser",
+  "description": "Builds an installable firmware package for a BirdDog PLAY entirely in the browser — SSH, Tailscale, NDI KVM, a USB media player, a UVC converter and your own modules",
   "license": "MIT",
   "type": "module",
   "scripts": {
     "assets": "scripts/build-assets.sh",
     "dev": "scripts/build-assets.sh && wrangler dev --port 8792",
-    "test": "scripts/build-assets.sh && node test/build-package.mjs",
+    "test": "scripts/build-assets.sh && node test/build-package.mjs && node test/modules.mjs",
     "deploy": "scripts/build-assets.sh && wrangler deploy"
   },
   "devDependencies": {

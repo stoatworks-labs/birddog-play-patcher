@@ -1,0 +1,6 @@
+#!/bin/bash
+# CI fixture. Never runs anywhere real; it exists so the package carries a
+# module and the tests can check where it landed and with what mode.
+set -eu
+bd_log "citest-mod ${BD_MODULE_VERSION:-?} would install to /userdata/bd-${BD_MODULE:-citest-mod}"
+cat payload/hello.txt

@@ -3,11 +3,16 @@
 
 import {
   Tar, extractTailscale, sha256Hex, buildConf, validateKey, humanSize,
+  readModule, addModule,
 } from './fw.js';
 
 const els = {};
 let manifest = null;
 let built = null; // { blob, name, sha256 }
+// Custom modules chosen in the file picker, each read and checked the moment
+// it is chosen so a bad one is reported before the build rather than during
+// it: [{ file, mod, error }].
+let modules = [];
 
 function log(msg, cls = '') {
   const line = document.createElement('div');
@@ -56,6 +61,44 @@ async function readLocalTailscale(file) {
   return { version: m ? m[1] : 'local', buf: await file.arrayBuffer() };
 }
 
+/* ---------------------------------------------------------------- modules */
+
+async function modulesChosen() {
+  modules = [];
+  for (const file of els.modFiles.files) {
+    const item = { file, mod: null, error: null };
+    try {
+      item.mod = await readModule(await file.arrayBuffer(), file.name);
+      const dup = modules.find((m) => m.mod && m.mod.name === item.mod.name);
+      if (dup) {
+        throw new Error(`${file.name}: another chosen file (${dup.file.name}) is also module "${item.mod.name}"`);
+      }
+    } catch (err) {
+      item.error = String(err.message || err);
+    }
+    modules.push(item);
+  }
+  renderModules();
+}
+
+function renderModules() {
+  els.modList.innerHTML = '';
+  for (const { file, mod, error } of modules) {
+    const li = document.createElement('li');
+    li.className = error ? 'err' : 'ok';
+    if (error) {
+      li.textContent = `✗ ${error}`;
+    } else {
+      const desc = mod.description ? ` — ${mod.description}` : '';
+      li.textContent =
+        `✓ ${mod.name} ${mod.version}: ${mod.files.length} file${mod.files.length === 1 ? '' : 's'}, ` +
+        `${humanSize(mod.size)}, from ${file.name}${desc}`;
+    }
+    els.modList.appendChild(li);
+  }
+  els.modList.hidden = !modules.length;
+}
+
 async function build() {
   els.build.disabled = true;
   els.download.hidden = true;
@@ -77,6 +120,16 @@ async function build() {
     const withPlay = els.optPlay.checked && !!manifest.bdplay;
     const withCam = els.optCam.checked && !!manifest.bdcam;
     const withCamUi = withCam && els.optCamUi.checked;
+    // A rejected module is never dropped silently: the user chose it, so
+    // building without it would ship something other than what they asked for.
+    const bad = modules.filter((m) => m.error);
+    if (bad.length) {
+      throw new Error(
+        `fix or remove the rejected module file${bad.length > 1 ? 's' : ''} before building: ` +
+        bad.map((m) => m.file.name).join(', '),
+      );
+    }
+    const withModules = modules.length > 0;
     const doReboot = els.optReboot.checked;
     const tag = (els.tag.value.trim() || 'web').replace(/[^A-Za-z0-9._-]/g, '-');
 
@@ -89,7 +142,9 @@ async function build() {
     log(`  probe.sh sha256 ${manifest.probe.sha256.slice(0, 16)}…`);
 
     tar.text('./authorized_keys', keyText + '\n', 0o600);
-    tar.text('./build.conf', buildConf({ tag, withTailscale, withTailscaleUi, withKvm, withPlay, withCam, withCamUi, doReboot }), 0o644);
+    tar.text('./build.conf', buildConf({
+      tag, withTailscale, withTailscaleUi, withKvm, withPlay, withCam, withCamUi, withModules, doReboot,
+    }), 0o644);
 
     for (const rel of manifest.rootfsOverlay || []) {
       tar.file(`./files/${rel}`, await asset(`assets/files/${rel}`), 0o644);
@@ -186,6 +241,17 @@ async function build() {
       log('USB media player: skipped');
     }
 
+    if (withModules) {
+      log('adding custom modules — each install runs as root after the payloads above…');
+      for (const { file, mod } of modules) {
+        addModule(tar, mod);
+        log(`  ${mod.name} ${mod.version}: ${mod.files.length} files, ${humanSize(mod.size)} ` +
+            `→ modules/${mod.name}/ (from ${file.name})`, 'ok');
+      }
+    } else {
+      log('custom modules: none');
+    }
+
     log('writing tar and gzipping…');
     const blob = await tar.gzip();
     const digest = await sha256Hex(blob);
@@ -218,7 +284,7 @@ function download() {
 async function init() {
   for (const id of [
     'key', 'tag', 'optTailscale', 'optKvm', 'optPlay', 'optReboot', 'tsFile',
-    'optCam', 'optCamUi', 'camRow',
+    'optCam', 'optCamUi', 'camRow', 'modFiles', 'modList',
     'build', 'download', 'log', 'result', 'resultName', 'resultSize',
     'resultSha', 'kvmRow', 'playRow', 'playExtras', 'payloadInfo', 'keyHint',
   ]) {
@@ -233,6 +299,7 @@ async function init() {
     els.optCamUi.disabled = !els.optCam.checked;
   }
   els.download.addEventListener('click', download);
+  els.modFiles.addEventListener('change', modulesChosen);
   els.key.addEventListener('input', () => {
     const err = els.key.value.trim() ? validateKey(els.key.value) : null;
     els.key.classList.toggle('bad', !!err);

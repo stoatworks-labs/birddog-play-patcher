@@ -9,6 +9,8 @@
 #     birddog-update-wrapper, BirdDogUpdateRunner.service, birddog-web-ui.
 #   * Idempotent — safe to install repeatedly.
 #   * Never exits non-zero in a way that leaves services stopped.
+#   * Third-party modules (modules/<name>/install) run sandboxed enough that
+#     none of the above depends on them behaving.
 
 SDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SDIR" || exit 0
@@ -27,6 +29,7 @@ WITH_KVM="${WITH_KVM:-0}"
 WITH_CAM="${WITH_CAM:-0}"
 WITH_CAM_UI="${WITH_CAM_UI:-0}"
 WITH_PLAY="${WITH_PLAY:-0}"
+WITH_MODULES="${WITH_MODULES:-0}"
 DO_REBOOT="${DO_REBOOT:-0}"
 
 log "installer starting, build ${BUILD_TAG}"
@@ -383,6 +386,66 @@ fi
 if [ -d "$SDIR/files" ]; then
   log "copying rootfs overlay"
   cp -rf "$SDIR/files/." / 2>/dev/null
+fi
+
+# ------------------------------------------------------------------ modules
+# Third-party modules. Built from github.com/stoatworks-labs/bd-play-module-template
+# and put in the package by the patcher (or `build.sh --module`), each is a
+# directory under modules/ with a module.conf and an `install` script, which
+# runs as root with the module directory as its cwd — the position this script
+# is in, so a module inherits the guard rails above (hardware ID, writable
+# rootfs, /userdata present) without repeating them.
+#
+# What a module MUST NOT be able to do is take the rest of this installer down
+# with it, because the restore of BirdDogRunner at the bottom is what stands
+# between a failed install and a unit that looks bricked. So each one:
+#   * runs in a subshell — its `exit`, `cd` and `set -e` stay its own;
+#   * is capped at MODULE_TIMEOUT seconds where `timeout` exists, since a hung
+#     module would hang the vendor's update wrapper with the display dark;
+#   * has a non-zero exit logged as a warning, and the loop carries on.
+# It is invoked as `bash ./install` regardless of its shebang, so the exported
+# bd_log below is always available to it. Staying in /userdata, being
+# idempotent and keeping off the recovery path are the module author's job;
+# the template spells those rules out. One line per module goes to
+# /userdata/bd-modules.log so the probe report can say what a unit carries.
+MODULE_TIMEOUT="${MODULE_TIMEOUT:-600}"
+bd_log() {
+  birddog-updater-log "[module:${BD_MODULE:-?}] $*"
+  echo "[module:${BD_MODULE:-?}] $*" >> /tmp/bd-custom-install.log
+}
+if [ "$WITH_MODULES" = 1 ] && [ -d "$SDIR/modules" ]; then
+  export -f bd_log
+  # birddog-updater-log is a function only when the stock command is absent
+  # (the fallback at the top of this file); a real command needs no export.
+  export -f birddog-updater-log 2>/dev/null
+  MTIMEOUT=""
+  command -v timeout >/dev/null 2>&1 && MTIMEOUT="timeout $MODULE_TIMEOUT"
+  for mdir in "$SDIR"/modules/*/; do
+    [ -d "$mdir" ] || continue
+    mdir="${mdir%/}"
+    mname="$(basename "$mdir")"
+    if [ ! -f "$mdir/install" ]; then
+      log "module ${mname}: no install script — skipped"
+      continue
+    fi
+    # Read, never source: module.conf is the module's file, not ours.
+    mver="$(sed -n 's/^VERSION=//p' "$mdir/module.conf" 2>/dev/null | head -1 | tr -d "\"'" | tr -cd 'A-Za-z0-9._+-')"
+    log "module ${mname} ${mver:-?}: installing"
+    # shellcheck disable=SC2086  # MTIMEOUT is deliberately word-split
+    ( cd "$mdir" && \
+        BD_MODULE="$mname" BD_MODULE_VERSION="$mver" BD_MODULE_DIR="$mdir" \
+        BD_BUILD_TAG="$BUILD_TAG" BD_HARDWARE="$HW" BD_INSTALL_LOG=/tmp/bd-custom-install.log \
+        $MTIMEOUT bash ./install ) >> /tmp/bd-custom-install.log 2>&1
+    mrc=$?
+    if [ "$mrc" = 0 ]; then
+      log "module ${mname}: installed"
+    elif [ "$mrc" = 124 ] && [ -n "$MTIMEOUT" ]; then
+      log "WARNING: module ${mname}: still running after ${MODULE_TIMEOUT}s, killed — continuing"
+    else
+      log "WARNING: module ${mname}: install exited ${mrc} — continuing"
+    fi
+    echo "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null) name=${mname} version=${mver:-?} build=${BUILD_TAG} rc=${mrc}" >> /userdata/bd-modules.log
+  done
 fi
 
 # --------------------------------------------------------------------- probe

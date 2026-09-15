@@ -1,0 +1,113 @@
+/* Shared by index.html and modules.html. Colours come from the two palettes
+   below and nothing else, so the pages agree in both colour schemes. */
+:root {
+  color-scheme: light dark;
+  --bg: #fbfaf8;      --panel: #fff;     --ink: #1c1b1a;   --dim: #6b6864;
+  --line: #e3e0da;    --accent: #b4541f; --ok: #2c6e49;    --warn: #8a6100;
+  --err: #a32b1c;     --code: #f3f1ec;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #171614;    --panel: #1f1e1c;  --ink: #e9e6e0;   --dim: #9c968d;
+    --line: #322f2b;  --accent: #e08a55; --ok: #6fbf8f;    --warn: #d9ad4f;
+    --err: #e8776a;   --code: #171614;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 2.5rem 1.25rem 5rem; background: var(--bg); color: var(--ink);
+  font: 15px/1.6 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+main { max-width: 46rem; margin: 0 auto; }
+h1 { font-size: 1.5rem; margin: 0 0 .25rem; letter-spacing: -.01em; }
+h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .09em;
+     color: var(--dim); margin: 2rem 0 .75rem; font-weight: 600; }
+p { margin: .5rem 0; }
+.sub { color: var(--dim); margin-bottom: 1.5rem; }
+code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85em; }
+code { background: var(--code); padding: .1em .35em; border-radius: 3px; }
+a { color: var(--accent); }
+
+.panel { background: var(--panel); border: 1px solid var(--line);
+         border-radius: 10px; padding: 1.25rem; }
+.banner { border-left: 3px solid var(--warn); background: var(--panel);
+          border-radius: 0 8px 8px 0; padding: .85rem 1rem; margin-bottom: 1.5rem; }
+.banner strong { color: var(--warn); }
+
+label.field { display: block; font-weight: 600; margin-bottom: .3rem; }
+textarea, input[type=text] {
+  width: 100%; padding: .6rem .7rem; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--bg); color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .82rem;
+}
+textarea { resize: vertical; min-height: 4.5rem; }
+textarea.bad, input.bad { border-color: var(--err); }
+.hint { color: var(--dim); font-size: .82rem; margin: .35rem 0 1.1rem; }
+
+.opt { display: flex; gap: .7rem; align-items: flex-start; padding: .6rem 0;
+       border-top: 1px solid var(--line); }
+.opt:first-of-type { border-top: 0; }
+.opt input { margin-top: .35rem; flex: none; }
+.opt .t { font-weight: 600; }
+.opt .d { color: var(--dim); font-size: .85rem; }
+.opt.disabled { opacity: .5; }
+.beta { font-size: .68rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .06em; color: var(--warn); border: 1px solid var(--warn);
+        border-radius: 3px; padding: .05em .35em; vertical-align: .12em; margin-left: .35rem; }
+
+.row { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; margin-top: 1.25rem; }
+button {
+  font: inherit; font-weight: 600; padding: .55rem 1.1rem; border-radius: 6px;
+  border: 1px solid transparent; background: var(--accent); color: #fff; cursor: pointer;
+}
+button:disabled { opacity: .5; cursor: not-allowed; }
+button.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+input[type=file] { font-size: .82rem; color: var(--dim); max-width: 100%; }
+
+#log { background: var(--code); border: 1px solid var(--line); border-radius: 8px;
+       padding: .8rem; margin-top: 1.25rem; max-height: 17rem; overflow: auto;
+       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+       font-size: .78rem; line-height: 1.7; }
+#log:empty { display: none; }
+.line { white-space: pre-wrap; word-break: break-word; }
+.line.ok { color: var(--ok); } .line.warn { color: var(--warn); } .line.err { color: var(--err); }
+
+#result { margin-top: 1rem; border: 1px solid var(--line); border-radius: 8px; padding: .85rem 1rem; }
+#result dl { display: grid; grid-template-columns: auto 1fr; gap: .2rem .9rem; margin: 0; }
+#result dt { color: var(--dim); font-size: .82rem; }
+#result dd { margin: 0; word-break: break-all; font-family: ui-monospace, Menlo, monospace; font-size: .8rem; }
+
+ol.steps { padding-left: 1.2rem; } ol.steps li { margin: .4rem 0; }
+.note { color: var(--dim); font-size: .85rem; }
+.note.err { color: var(--err); }
+footer { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--line);
+         color: var(--dim); font-size: .82rem; }
+
+/* Where each payload's code lives — one line under the option text. */
+.opt .src { color: var(--dim); font-size: .8rem; margin-top: .3rem; }
+.opt .src a { color: var(--dim); }
+.opt .src a:hover { color: var(--accent); }
+
+/* Custom modules: the file input's verdict list, one line per chosen file. */
+#modList { list-style: none; margin: .5rem 0 0; padding: 0; font-size: .82rem;
+           font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+#modList li { padding: .25rem 0; border-top: 1px solid var(--line); word-break: break-word; }
+#modList li:first-child { border-top: 0; }
+#modList li.ok { color: var(--ok); } #modList li.err { color: var(--err); }
+
+/* modules.html — long-form documentation on the same grid. */
+.doc h2 { font-size: 1.05rem; text-transform: none; letter-spacing: 0; color: var(--ink);
+          margin: 2.25rem 0 .6rem; }
+.doc h3 { font-size: .95rem; margin: 1.5rem 0 .4rem; }
+.doc pre { background: var(--code); border: 1px solid var(--line); border-radius: 8px;
+           padding: .8rem 1rem; overflow-x: auto; font-size: .8rem; line-height: 1.55; }
+.doc pre code { background: none; padding: 0; font-size: inherit; }
+.doc table { border-collapse: collapse; width: 100%; font-size: .88rem; margin: .75rem 0; }
+.doc th, .doc td { text-align: left; vertical-align: top; padding: .45rem .6rem;
+                   border-bottom: 1px solid var(--line); }
+.doc th { color: var(--dim); font-weight: 600; font-size: .8rem; text-transform: uppercase;
+          letter-spacing: .06em; }
+.doc ul, .doc ol { padding-left: 1.3rem; } .doc li { margin: .3rem 0; }
+.doc .toc { columns: 2; column-gap: 2rem; font-size: .88rem; }
+@media (max-width: 40rem) { .doc .toc { columns: 1; } }
+.crumb { font-size: .82rem; color: var(--dim); margin-bottom: 1.25rem; }
