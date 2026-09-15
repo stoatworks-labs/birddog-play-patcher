@@ -83,5 +83,7 @@ that repo's README and NOTES.
   patches (bdplay, bdcam, bdgw); coexistence in either order is tested in the gateway repo.
 - ATTRIBUTIONS gained MediaMTX via the fleet registry (stoatworks-backend ba5eb1e detects
   `bluenviron/mediamtx/releases` in packaging code, the way Tailscale is detected).
+- `converter/dist/bdcam-linux-arm64` rebuilt from bdcam 859ac90 (zig 0.16, glibc floor 2.17): the
+  UVC tab gained a GATEWAY button that fills in `srt://127.0.0.1:8890?streamid=publish:cam`.
 
 Related: [compressionstream gzip engine variance](https://github.com/stoatworks-labs/fleet-notes/blob/main/notes/reference_compressionstream_gzip_engine_variance.md), **release workflow** (working-practice note, kept in Claude memory).
