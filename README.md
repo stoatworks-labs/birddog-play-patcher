@@ -117,10 +117,12 @@ it in the browser, checks its structure, and writes it into the `.fw` at `module
 device, `update` runs each `modules/*/install` as root, from that directory, after its own
 payloads.
 
-What the installer guarantees around a module is what makes this safe to offer: each runs in a
-subshell, under `timeout 600` where the command exists, and a non-zero exit is logged and skipped
-— so a broken module can never stop the `BirdDogRunner` restore at the end, which is what brings
-the picture back. The page refuses what the format cannot carry (paths over ustar's 100 bytes,
+What the installer does around a module bounds the *accidental* failures: each runs in a
+subshell, under `timeout 600` where the command exists (Debian 10's coreutils has it), and a
+non-zero exit is logged and skipped — so a module that fails, exits non-zero or hangs cannot stop
+the `BirdDogRunner` restore at the end, which is what brings the picture back. It bounds nothing
+deliberate: a module runs as root and can reboot, stop the display or kill the updater if it
+chooses to. The page refuses what the format cannot carry (paths over ustar's 100 bytes,
 symlinks, a non-aarch64 ELF, a name that collides with a built-in payload) and checks **nothing**
 about what `install` does. That is the author's business, and the page says so.
 

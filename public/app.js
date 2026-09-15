@@ -3,7 +3,7 @@
 
 import {
   Tar, extractTailscale, sha256Hex, buildConf, validateKey, humanSize,
-  readModule, addModule,
+  readModule, addModule, MODULE_MAX_BYTES,
 } from './fw.js';
 
 const els = {};
@@ -68,6 +68,11 @@ async function modulesChosen() {
   for (const file of els.modFiles.files) {
     const item = { file, mod: null, error: null };
     try {
+      // Refused before it is even read: a file this big is not a module, and
+      // reading it into memory is the cost to avoid.
+      if (file.size > MODULE_MAX_BYTES) {
+        throw new Error(`${file.name}: ${humanSize(file.size)} is more than the ${humanSize(MODULE_MAX_BYTES)} ceiling`);
+      }
       item.mod = await readModule(await file.arrayBuffer(), file.name);
       const dup = modules.find((m) => m.mod && m.mod.name === item.mod.name);
       if (dup) {

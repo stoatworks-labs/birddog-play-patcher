@@ -103,18 +103,23 @@ payload/             whatever install copies to /userdata/bd-&lt;name&gt;/
      whichever built-in payloads were selected — so a module may rely on, say,
      <code>/userdata/tailscale</code> being present if the user ticked Tailscale, and should
      cope if they did not.</p>
-  <p>It then runs your module in a way that means a broken one cannot take the install down
-     with it:</p>
+  <p>It then runs your module in a way that means one that <em>fails</em> — exits non-zero,
+     crashes, hangs — cannot take the install down with it:</p>
   <ul>
     <li><strong>in a subshell</strong>, so your <code>exit</code>, <code>cd</code> and
         <code>set -e</code> affect only your script;</li>
-    <li><strong>under <code>timeout 600</code></strong> where the command exists — a module still
-        running after ten minutes is killed, because a hung one would hang BirdDog's update
-        wrapper with the HDMI output dark;</li>
-    <li><strong>a non-zero exit is logged as a warning</strong> and the next module runs. The
-        installer always reaches its last step, restarting <code>BirdDogRunner</code>, which is
-        what brings the picture back after the wrapper stopped it.</li>
+    <li><strong>under <code>timeout 600</code></strong> where the command exists — Debian 10's
+        coreutils, which stock PLAY firmware runs, provides it; a module still running after ten
+        minutes is killed, because a hung one would hang BirdDog's update wrapper with the HDMI
+        output dark. Without <code>timeout</code> a hang is not caught;</li>
+    <li><strong>a non-zero exit is logged as a warning</strong> and the next module runs, so the
+        installer reaches its last step, restarting <code>BirdDogRunner</code>, which is what
+        brings the picture back after the wrapper stopped it.</li>
   </ul>
+  <p>None of that contains a module that <em>means</em> harm or gets it badly wrong: it runs as
+     root, and it can reboot, stop <code>BirdDogRunner</code> without starting it again, or kill
+     the updater mid-way, and no wrapper will stop it. That is what the rules below are for, and
+     why the generator asks you to read what you package.</p>
   <p>Modules run in name order, after the built-in payloads and the rootfs overlay, before the
      probe report and before the built-in units are enabled. One line per module —
      <code>name= version= build= rc=</code> — is appended to

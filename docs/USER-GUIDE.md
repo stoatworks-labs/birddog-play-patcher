@@ -107,10 +107,13 @@ the installer runs each module's `install` **as root**, after the payloads above
 format and the device can carry. Read what you package. Each chosen file is listed with a tick or
 the reason it was refused, and a refused file blocks the build rather than being dropped quietly.
 
-A broken module cannot leave the unit dark: the installer runs each one on its own, stops it after
-ten minutes, logs a failure and carries on, so the step that restarts BirdDog's display always
-runs. What every module printed is in `/tmp/bd-custom-install.log` on the device, and the probe
-report ends with one line per module and its exit code.
+A module that fails, exits non-zero or hangs cannot leave the unit dark: the installer runs each
+one on its own, stops it after ten minutes (Debian's `timeout`, which stock PLAY firmware carries;
+without it a hang is not caught), logs the failure and carries on, so the step that restarts
+BirdDog's display still runs. What that cannot contain is a module that *deliberately* reboots,
+stops the display without restarting it, or kills the updater — it runs as root, and only reading
+it protects you from that. What every module printed is in `/tmp/bd-custom-install.log` on the
+device, and the probe report ends with one line per module and its exit code.
 
 To write one, start from the template at
 [github.com/stoatworks-labs/bd-play-module-template](https://github.com/stoatworks-labs/bd-play-module-template)

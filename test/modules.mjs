@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const { readModule, tarEntries, gunzip, parseModuleConf, RESERVED_MODULE_NAMES } =
+const { readModule, tarEntries, gunzip, parseModuleConf, paxRecords, RESERVED_MODULE_NAMES } =
   await import(join(resolve(HERE, '..'), 'public/fw.js'));
 
 let failures = 0;
@@ -125,6 +125,64 @@ check(pfx.includes('pfx/payload/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/bbb
   check(!got.some((n) => n.includes('@LongLink')), 'GNU carrier record consumed');
   check(got.length === 3, 'three members, not four');
   await refuses(readModule(archive, 'gnu.tar'), /path too long.*f\.txt/, 'long GNU path refused, naming it');
+}
+
+// pax records are length-prefixed in BYTES. A non-ASCII path is longer in
+// bytes than in characters, so a reader that walks characters loses the
+// record boundary and every record after it.
+{
+  const rec = (k, v) => {
+    const body = `${k}=${v}\n`;
+    const bodyLen = new TextEncoder().encode(body).length;
+    let len = bodyLen + 2; // "<len> " + body; widen if the number itself is longer
+    while (String(len).length + 1 + bodyLen !== len) len = String(len).length + 1 + bodyLen;
+    return new TextEncoder().encode(`${len} ${body}`);
+  };
+  const paxBytes = new Uint8Array(await new Blob([rec('path', 'héllo/wörld/ünïcode.txt'), rec('mtime', '1577836800')]).arrayBuffer());
+  const recs = paxRecords(paxBytes);
+  check(recs.path === 'héllo/wörld/ünïcode.txt' && recs.mtime === '1577836800', 'pax records split on byte lengths (non-ASCII path)');
+}
+mkmod('utf8', 'utf8', (d) => writeFileSync(join(d, 'payload/héllo-wörld.txt'), 'x'));
+sh('tar czf utf8.tgz utf8');
+const utf8 = await read('utf8.tgz');
+check(utf8.files.some((f) => f.path === 'payload/héllo-wörld.txt'), `non-ASCII file name read back intact (${tarIsGnu ? 'GNU' : 'bsdtar'})`);
+{
+  // A global pax header carrying `path` is refused rather than silently ignored.
+  const gnuHdr = (name, size, type) => {
+    const h = new Uint8Array(512);
+    const put = (str, off) => h.set(new TextEncoder().encode(str), off);
+    put(name, 0); put('0000644\0', 100); put('0000000\0', 108); put('0000000\0', 116);
+    put(size.toString(8).padStart(11, '0') + '\0', 124); put('00000000000\0', 136);
+    h.fill(0x20, 148, 156); put(type, 156); put('ustar\0', 257); put('00', 263);
+    let sum = 0; for (const b of h) sum += b;
+    put(sum.toString(8).padStart(6, '0') + '\0 ', 148);
+    return h;
+  };
+  const pad = (n) => new Uint8Array((512 - (n % 512)) % 512);
+  const g = new TextEncoder().encode('16 path=module\n'); // 16 bytes exactly
+  const body = new TextEncoder().encode('NAME=g\nVERSION=1\n');
+  const archive = new Uint8Array(await new Blob([
+    gnuHdr('pax_global_header', g.length, 'g'), g, pad(g.length),
+    gnuHdr('module.conf', body.length, '0'), body, pad(body.length),
+    new Uint8Array(1024),
+  ]).arrayBuffer());
+  await refuses(readModule(archive, 'global.tar'), /global pax path override/, 'global pax path override refused');
+}
+
+console.log('\nsize ceiling:');
+{
+  // 8 MiB of zeros gzip to ~8 KB. Corrupt the trailer: a reader that unpacks
+  // the whole stream before checking size hits zlib's error; one that stops
+  // at the ceiling reports the ceiling and never gets that far.
+  const zeros = new ReadableStream({
+    pull(c) { c.enqueue(new Uint8Array(1 << 20)); if (++this.n >= 8) c.close(); }, n: 0,
+  });
+  const gz = new Uint8Array(await new Response(zeros.pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
+  gz[gz.length - 3] ^= 0xff; gz[gz.length - 6] ^= 0xff; // CRC32 and ISIZE, both wrong now
+  await refuses(readModule(gz, 'bomb.tgz', { maxBytes: 1 << 20 }), /unpacks to more than .* — refusing to read further/,
+    'oversize gzip refused at the ceiling, before the corrupt trailer');
+  await refuses(readModule(new Uint8Array(3 << 20), 'big.tar', { maxBytes: 1 << 20 }), /is more than the 1\.0 MB ceiling/,
+    'oversize input refused before parsing');
 }
 
 console.log('\nrefusals:');

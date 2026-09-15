@@ -143,28 +143,48 @@ export function tarEntries(buf) {
       pending.linkname = cstr(data);
       continue;
     }
-    if (type === 'x') { // pax extended header: "<len> key=value\n" records
-      const text = dec.decode(data);
-      let p = 0;
-      while (p < text.length) {
-        const sp = text.indexOf(' ', p);
-        const len = parseInt(text.slice(p, sp), 10);
-        if (!len) break;
-        const rec = text.slice(sp + 1, p + len - 1);
-        const eq = rec.indexOf('=');
-        const key = rec.slice(0, eq);
-        if (key === 'path') pending.name = rec.slice(eq + 1);
-        if (key === 'linkpath') pending.linkname = rec.slice(eq + 1);
-        p += len;
+    if (type === 'x' || type === 'g') {
+      // pax header: "<len> key=value\n" records, where <len> counts BYTES of
+      // the whole record — so walk the raw bytes and decode each record on
+      // its own, or a non-ASCII path shifts every record after it.
+      const recs = paxRecords(data);
+      if (type === 'g') {
+        // POSIX lets a global header override path for every later member.
+        // No tar in use writes one, and honouring it silently would be
+        // worse than refusing: a reader that ignored it would stage members
+        // under the wrong names. Refuse, and say what to repack with.
+        if ('path' in recs || 'linkpath' in recs) {
+          throw new Error('archive uses a global pax path override — repack it as plain ustar (tar --format=ustar)');
+        }
+        continue;
       }
+      if ('path' in recs) pending.name = recs.path;
+      if ('linkpath' in recs) pending.linkname = recs.linkpath;
       continue;
     }
-    if (type === 'g') continue; // pax global header — nothing we use
 
     if (pending.name) name = pending.name;
     const linkname = pending.linkname || str(157, 100);
     pending = {};
     out.push({ name, data, mode, type, linkname });
+  }
+  return out;
+}
+
+/** The key=value records of one pax header, split on byte lengths. */
+export function paxRecords(bytes) {
+  const dec = new TextDecoder();
+  const out = {};
+  let p = 0;
+  while (p < bytes.length) {
+    let sp = p;
+    while (sp < bytes.length && bytes[sp] !== 0x20) sp++;
+    const len = parseInt(dec.decode(bytes.subarray(p, sp)), 10);
+    if (!len || len <= sp - p + 1) break; // malformed: stop rather than loop
+    const rec = dec.decode(bytes.subarray(sp + 1, p + len - 1)); // drop the trailing \n
+    const eq = rec.indexOf('=');
+    if (eq > 0) out[rec.slice(0, eq)] = rec.slice(eq + 1);
+    p += len;
   }
   return out;
 }
@@ -179,6 +199,32 @@ export function parseTar(buf) {
 export async function gunzip(buf) {
   const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
   return new Response(stream).arrayBuffer();
+}
+
+/**
+ * gunzip that gives up as soon as the output passes `limit` bytes, instead of
+ * materialising the whole thing first. A few hundred KB of gzip'd zeros
+ * unpack to gigabytes; a user-supplied module must be refused before that
+ * fills the tab, not after.
+ */
+export async function gunzipBounded(buf, limit) {
+  const reader = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip')).getReader();
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > limit) {
+      await reader.cancel();
+      throw new Error(`unpacks to more than ${humanSize(limit)} — refusing to read further`);
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) { out.set(c, off); off += c.byteLength; }
+  return out;
 }
 
 export async function sha256Hex(input) {
@@ -270,19 +316,31 @@ export function parseModuleConf(text) {
  * Accepted layouts: module.conf and install at the archive root, or the whole
  * module inside one top-level directory (what `tar czf x.tgz mymodule/` makes).
  */
-export async function readModule(buf, label = 'module') {
+export async function readModule(buf, label = 'module', { maxBytes = MODULE_MAX_BYTES } = {}) {
   let bytes = new Uint8Array(buf);
   if (bytes.length > 1 && bytes[0] === 0x50 && bytes[1] === 0x4b) {
     throw new Error(`${label}: that is a zip file — a module is a .tar.gz (tar czf …)`);
   }
+  if (bytes.length > maxBytes) {
+    throw new Error(`${label}: ${humanSize(bytes.length)} is more than the ${humanSize(maxBytes)} ceiling`);
+  }
   if (bytes.length > 1 && bytes[0] === 0x1f && bytes[1] === 0x8b) {
-    bytes = new Uint8Array(await gunzip(bytes));
+    // The tar can be a little larger than its files (headers, padding); the
+    // precise check on the files' own bytes comes after parsing.
+    try {
+      bytes = await gunzipBounded(bytes, maxBytes + 1024 * 1024);
+    } catch (err) {
+      throw new Error(`${label}: ${err.message}`);
+    }
   }
   if (bytes.length < BLOCK * 2) throw new Error(`${label}: too small to be a tar archive`);
   const magic = new TextDecoder().decode(bytes.subarray(257, 262));
   if (magic !== 'ustar') throw new Error(`${label}: not a tar archive (no ustar magic)`);
 
-  // Normalise names and drop what a Mac leaves in a tarball.
+  // Normalise names and drop what a Mac leaves in a tarball. A leading "/"
+  // (an archive made with -P) is stripped the way tar itself strips it on
+  // extraction; every member is re-rooted under ./modules/<name>/ below, so
+  // an absolute name can never place anything outside the module.
   const junk = (p) => /(^|\/)(\._[^/]*|\.DS_Store|__MACOSX(\/.*)?|PaxHeaders?(\.\d+)?\/.*)$/.test(p);
   const entries = [];
   for (const e of tarEntries(bytes)) {
@@ -359,9 +417,9 @@ export async function readModule(buf, label = 'module') {
     out.push({ path: e.path, data: e.data, mode: exec ? 0o755 : 0o644 });
     size += e.data.length;
   }
-  if (size > MODULE_MAX_BYTES) {
+  if (size > maxBytes) {
     throw new Error(
-      `${label}: ${humanSize(size)} unpacked is more than the ${humanSize(MODULE_MAX_BYTES)} ceiling — ` +
+      `${label}: ${humanSize(size)} unpacked is more than the ${humanSize(maxBytes)} ceiling — ` +
       'the updater extracts the whole package into a temp dir on the device',
     );
   }
