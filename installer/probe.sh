@@ -95,6 +95,13 @@ systemctl list-units --type=service --no-pager 2>/dev/null | grep -iE 'birddog|b
 echo "-- our units:"
 systemctl status bd-tailscaled --no-pager 2>/dev/null | head -12
 
+sec "custom modules — one line per modules/<name> the installer ran"
+# Written by the installer's modules loop: name, version, build tag and the
+# install script's exit code. Nothing here is secret; the module dirs are
+# listed so a later SSH session knows what to look at.
+if [ -s /userdata/bd-modules.log ]; then cat /userdata/bd-modules.log; else echo "(none recorded)"; fi
+echo "-- /userdata/bd-*:"; ls -d /userdata/bd-* 2>/dev/null
+
 sec "os"
 cat /etc/os-release 2>/dev/null | head -4
 echo "-- glibc: $(ldd --version 2>/dev/null | head -1)"

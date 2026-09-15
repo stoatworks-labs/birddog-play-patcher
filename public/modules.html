@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Building a module — BirdDog PLAY firmware package generator</title>
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<main class="doc">
+  <p class="crumb"><a href="./">← Package generator</a></p>
+  <h1>Building a module</h1>
+  <p class="sub">How to make something the generator packs into your <code>.fw</code> and the
+     installer runs on the PLAY, next to Tailscale, the KVM endpoint, the media player and the
+     UVC converter — which are all modules in everything but packaging.</p>
+
+  <div class="banner">
+    <p><strong>A module runs as root on your device.</strong> The generator checks a module's
+       structure — the archive, the names, the paths, that any binary is aarch64 — and
+       <strong>nothing</strong> about what its <code>install</code> does. It can install exactly
+       the same kind of thing as the built-in payloads, which means it can also break exactly the
+       same things. Read what you package, and treat the first install of anything as an
+       experiment on a unit you can afford to have offline.</p>
+  </div>
+
+  <ul class="toc">
+    <li><a href="#what">What a module is</a></li>
+    <li><a href="#layout">Layout and <code>module.conf</code></a></li>
+    <li><a href="#install">What <code>install</code> gets</a></li>
+    <li><a href="#rules">The rules</a></li>
+    <li><a href="#limits">Limits the format imposes</a></li>
+    <li><a href="#build">Building and checking</a></li>
+    <li><a href="#device">On the device</a></li>
+    <li><a href="#examples">Worked examples</a></li>
+  </ul>
+
+  <h2 id="what">What a module is</h2>
+  <p>The whole package format is a gzip'd tar with an executable <code>update</code> at the top
+     level, which BirdDog's updater extracts into a temp dir and runs as root with no signature
+     check. Our <code>update</code> is a bash script. A <strong>module</strong> is a directory it
+     finds at <code>modules/&lt;name&gt;/</code> inside that package, carrying an
+     <code>install</code> script that it runs — as root, from that directory — once its own
+     payloads are in place.</p>
+  <p>You hand the generator a <code>.tgz</code> of that directory under <strong>Custom
+     modules</strong>. It is read in this browser (nothing is uploaded anywhere), checked, and
+     written into the <code>.fw</code> at <code>./modules/&lt;name&gt;/</code>. The quickest way
+     to a working one is <a href="https://github.com/stoatworks-labs/bd-play-module-template">bd-play-module-template</a>:
+     a complete module that installs a heartbeat service, with every line of its
+     <code>install</code> commented.</p>
+
+  <h2 id="layout">Layout and <code>module.conf</code></h2>
+<pre><code>module.conf          NAME, VERSION, DESCRIPTION, HOMEPAGE — read, never sourced
+install              bash; the installer runs it as root with this directory as cwd
+uninstall            optional but expected; copy it onto the device so it can be run later
+payload/             whatever install copies to /userdata/bd-&lt;name&gt;/
+  run.sh               the unit's ExecStart
+  bin/                 compiled programs — aarch64 only
+</code></pre>
+  <p>Only <code>module.conf</code> and <code>install</code> are required, and only their
+     <em>names</em> are — what goes in <code>payload/</code> and how <code>install</code> uses it
+     are yours. The archive may hold these at its root, or all inside one top-level directory
+     (what <code>tar czf module.tgz mymodule/</code> makes); the generator strips that directory.
+     macOS <code>._</code> files and <code>.DS_Store</code> are dropped.</p>
+  <p><code>module.conf</code> is shell-style <code>KEY=value</code>, one per line, quotes
+     optional. It is parsed with a regular expression here and with <code>sed</code> on the
+     device; nothing in it is executed.</p>
+  <table>
+    <tr><th>Key</th><th>Rule</th><th>Used for</th></tr>
+    <tr><td><code>NAME</code></td>
+        <td>required; 1–32 characters of <code>a-z 0-9 -</code>, starting with a letter or digit.
+            Not one of <code>tailscale tailscale-ui kvm cam cam-api play probe modules</code>,
+            which the generator's own payloads use.</td>
+        <td><code>modules/&lt;NAME&gt;/</code> in the package; by convention
+            <code>/userdata/bd-&lt;NAME&gt;</code> and <code>bd-&lt;NAME&gt;.service</code> on the
+            device. Two chosen modules with one <code>NAME</code> are refused.</td></tr>
+    <tr><td><code>VERSION</code></td>
+        <td>required; 1–32 characters of <code>A-Z a-z 0-9 . _ + -</code></td>
+        <td>logged on the device with each install</td></tr>
+    <tr><td><code>DESCRIPTION</code></td><td>optional</td><td>shown in the build log here</td></tr>
+    <tr><td><code>HOMEPAGE</code></td><td>optional</td><td>for whoever reads the file later</td></tr>
+  </table>
+
+  <h2 id="install">What <code>install</code> gets</h2>
+  <p>The installer runs <code>bash ./install</code> — bash regardless of your shebang — with
+     the module directory as the working directory and this in the environment:</p>
+  <table>
+    <tr><th>Variable</th><th>Value</th></tr>
+    <tr><td><code>BD_MODULE</code></td><td><code>NAME</code> from <code>module.conf</code></td></tr>
+    <tr><td><code>BD_MODULE_VERSION</code></td><td><code>VERSION</code> from <code>module.conf</code></td></tr>
+    <tr><td><code>BD_MODULE_DIR</code></td><td>absolute path of the module directory (also the cwd)</td></tr>
+    <tr><td><code>BD_BUILD_TAG</code></td><td>the package's build tag, as typed on the generator</td></tr>
+    <tr><td><code>BD_HARDWARE</code></td><td><code>BirdDog PLAY</code> or <code>BirdDog Pod</code> — anything
+        else has already been refused before any module runs</td></tr>
+    <tr><td><code>BD_INSTALL_LOG</code></td><td><code>/tmp/bd-custom-install.log</code>, where your stdout
+        and stderr are appended</td></tr>
+    <tr><td><code>bd_log</code></td><td>an exported function. <code>bd_log "text"</code> appears in the
+        web UI's live update log as <code>[module:&lt;name&gt;] text</code>, and in the install
+        log. Use it for the two or three lines a person watching the upload should see.</td></tr>
+  </table>
+  <p>Around your script, the installer has already: checked the hardware ID, remounted the
+     rootfs read-write if it needed to, made sure <code>/userdata</code> exists, and installed
+     whichever built-in payloads were selected — so a module may rely on, say,
+     <code>/userdata/tailscale</code> being present if the user ticked Tailscale, and should
+     cope if they did not.</p>
+  <p>It then runs your module in a way that means one that <em>fails</em> — exits non-zero,
+     crashes, hangs — cannot take the install down with it:</p>
+  <ul>
+    <li><strong>in a subshell</strong>, so your <code>exit</code>, <code>cd</code> and
+        <code>set -e</code> affect only your script;</li>
+    <li><strong>under <code>timeout 600</code></strong> where the command exists — Debian 10's
+        coreutils, which stock PLAY firmware runs, provides it; a module still running after ten
+        minutes is killed, because a hung one would hang BirdDog's update wrapper with the HDMI
+        output dark. Without <code>timeout</code> a hang is not caught;</li>
+    <li><strong>a non-zero exit is logged as a warning</strong> and the next module runs, so the
+        installer reaches its last step, restarting <code>BirdDogRunner</code>, which is what
+        brings the picture back after the wrapper stopped it.</li>
+  </ul>
+  <p>None of that contains a module that <em>means</em> harm or gets it badly wrong: it runs as
+     root, and it can reboot, stop <code>BirdDogRunner</code> without starting it again, or kill
+     the updater mid-way, and no wrapper will stop it. That is what the rules below are for, and
+     why the generator asks you to read what you package.</p>
+  <p>Modules run in name order, after the built-in payloads and the rootfs overlay, before the
+     probe report and before the built-in units are enabled. One line per module —
+     <code>name= version= build= rc=</code> — is appended to
+     <code>/userdata/bd-modules.log</code>.</p>
+
+  <h2 id="rules">The rules</h2>
+  <p>Nothing enforces these. They are what has kept every unit this project has touched
+     recoverable, and they are the same rules the built-in installer follows.</p>
+  <ul>
+    <li><strong>Keep everything under <code>/userdata/bd-&lt;name&gt;</code>.</strong> The
+        rootfs gets a systemd unit at most. <code>/userdata</code> survives vendor firmware
+        updates — the vendor's <code>bdup.sh</code> deletes only its own paths there — and the
+        rootfs does not.</li>
+    <li><strong>Never touch <code>sshd</code>, <code>sshd_config</code>,
+        <code>birddog-update-wrapper</code>, <code>BirdDogUpdateRunner</code> or
+        <code>birddog-web-ui</code>.</strong> They are how you get back in when something is
+        wrong. If you must patch a web UI page — bdts and bdcam do — copy their shape: a
+        marker-wrapped, exactly reversible edit, a pristine backup beside the file, a restart
+        of <code>BirdDogWebUI</code> (the unit, not the binary name), a check that it came back
+        <em>as a new pid</em> and answers, and an automatic rollback if not.</li>
+    <li><strong>Be idempotent.</strong> <code>install</code> runs again on every reinstall of the
+        package. Keep a config the user edited on the device rather than overwriting it; the
+        template's <code>hello.conf</code> shows the pattern.</li>
+    <li><strong>Do not reboot, and do not stop <code>BirdDogRunner</code> unless you start it
+        again.</strong> The package has its own reboot option. A stopped
+        <code>BirdDogRunner</code> is a dark HDMI output that looks exactly like a bricked
+        unit.</li>
+    <li><strong>Exit 0 on success.</strong> A service that failed to start is a matter for
+        <code>bd_log</code> and <code>journalctl</code>, not a failed firmware install.</li>
+    <li><strong>Pick a port nobody has.</strong> 80 and 8080 are BirdDog's (and 8080 has no
+        authentication of any kind), 8090 <code>bd-cam-api</code>, 8091 <code>bd-play</code>,
+        8092 <code>bd-tailscale-ui</code>, 9031 sshd. A collision is silent: the second service
+        fails to bind and its page never answers.</li>
+    <li><strong>Supervise yourself.</strong> A unit with <code>Restart=always</code> and a
+        program that exits 0 when it has nothing to do (no device attached, say) is a hotplug
+        poller with no udev rule — that is how <code>bd-kvm</code> and <code>bd-cam</code>
+        work, and why they need nothing from BirdDog's own hooks.</li>
+  </ul>
+
+  <h2 id="limits">Limits the format imposes</h2>
+  <ul>
+    <li><strong>Paths are at most 100 bytes</strong>, counting the <code>./modules/&lt;name&gt;/</code>
+        prefix. The package is plain ustar, and the writer here refuses a longer name rather
+        than truncating it. The generator names the offending path and says by how much.</li>
+    <li><strong>No symlinks or hard links</strong> in the archive. Create them from
+        <code>install</code>.</li>
+    <li><strong>Binaries must be aarch64 ELF</strong> — anything else is refused here, because
+        it could never run on the device. Build fully static, or against Debian 10's glibc 2.28.
+        Go with <code>CGO_ENABLED=0 GOOS=linux GOARCH=arm64</code> is the easy route (that is
+        how bdplay is built); bdcam and bdts show cgo with zig as the cross toolchain.</li>
+    <li><strong>Keep it small.</strong> The updater extracts the whole package into a temp dir
+        on the device before anything runs. Tens of megabytes are proven — Tailscale is 68 MB
+        unpacked — and a module over 256 MB is refused.</li>
+    <li><strong>What the device has:</strong> bash, coreutils, systemd, curl, GStreamer with the
+        Rockchip hardware decoder, and BirdDog's <code>libndi</code> (which bdkvm and bdcam
+        <code>dlopen</code> rather than ship). <strong>No python, no perl, no package
+        manager.</strong></li>
+  </ul>
+
+  <h2 id="build">Building and checking</h2>
+  <p>Any tar will do — <code>tar czf mymodule.tgz mymodule/</code> — but the template's
+     <code>build.sh</code> packs only what the device needs, as ustar owned by root, and runs
+     its <code>check.sh</code> first: names, path lengths, links, ELF architecture, that every
+     script parses, and a warning if <code>install</code> so much as mentions the recovery
+     path or rebooting. Its CI then has GNU tar list the archive and imports this page's own
+     <code>fw.js</code> to prove the generator will accept it:</p>
+<pre><code>./check.sh
+./build.sh                                   # dist/&lt;NAME&gt;-&lt;VERSION&gt;.tgz
+node scripts/patcher-accepts.mjs dist/*.tgz  # the generator's reader, same messages as here
+</code></pre>
+  <p>Then choose the <code>.tgz</code> under <strong>Custom modules</strong> on the
+     <a href="./">generator</a>. Each chosen file is read and checked immediately and listed with
+     a tick or the reason it was refused; a refused file blocks the build rather than being
+     dropped quietly, because you chose it. The build log names each module and where it lands
+     in the package. If you want to see exactly what will run, the <code>.fw</code> is a plain
+     tarball: <code>tar tzvf BirdDog_PLAY-custom-*.fw</code>.</p>
+
+  <h2 id="device">On the device</h2>
+  <ol class="steps">
+    <li>Upload the <code>.fw</code> on the PLAY's firmware page. Your <code>bd_log</code> lines
+        appear in its live log as <code>[module:&lt;name&gt;] …</code>.</li>
+    <li>Read <code>http://&lt;play-ip&gt;/static/bd-probe.txt</code> — the probe report now ends
+        with one line per module and its exit code, and works without SSH.</li>
+    <li>Everything your <code>install</code> printed is in
+        <code>/tmp/bd-custom-install.log</code>; <code>journalctl -u bd-&lt;name&gt;</code> has
+        the service.</li>
+    <li>To remove a module built from the template:
+        <code>bash /userdata/bd-&lt;name&gt;/uninstall</code>.</li>
+  </ol>
+
+  <h2 id="examples">Worked examples</h2>
+  <p>Every payload this generator ships is a module in all but packaging, and each is public:</p>
+  <ul>
+    <li><a href="https://github.com/stoatworks-labs/bd-play-module-template">bd-play-module-template</a>
+        — the starting point: a heartbeat service, <code>install</code>, <code>uninstall</code>,
+        <code>build.sh</code>, <code>check.sh</code> and CI.</li>
+    <li><a href="https://github.com/stoatworks-labs/bdts">bdts</a> — patches a web UI page with a
+        health check and rollback; the pattern to copy if you must touch the UI.</li>
+    <li><a href="https://github.com/stoatworks-labs/bdcam">bdcam</a> — a self-supervising unit
+        that exits 0 with no camera attached, a separate settings-API unit, and a config kept
+        across reinstalls.</li>
+    <li><a href="https://github.com/stoatworks-labs/bd-play-usb-player">bd-play-usb-player</a>
+        — a static Go binary taking the display from <code>BirdDogRunner</code> and giving it
+        back on every exit path.</li>
+    <li><a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/agent">agent/</a>
+        in this repo — bdkvm, and <a href="https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/installer/update"><code>installer/update</code></a>,
+        the installer itself. Its <code>modules</code> section is the code that runs yours; read
+        it before you rely on anything written here.</li>
+  </ul>
+
+  <footer>
+    <p>Not affiliated with or endorsed by BirdDog. A module is your code running as root on
+       your device; this page and the generator can tell you it is well-formed, and nothing
+       more.</p>
+  </footer>
+</main>
+<script src="/assets/support-footer-version.js" defer></script>
+<script src="/support-footer.js" defer
+        data-app="BirdDog PLAY Patcher"
+        data-repo="https://github.com/stoatworks-labs/birddog-play-patcher"></script>
+</body>
+</html>

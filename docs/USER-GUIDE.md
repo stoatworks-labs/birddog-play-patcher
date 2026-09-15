@@ -3,7 +3,7 @@
 Builds an installable `.fw` for a [BirdDog PLAY](https://birddog.tv) that adds **an SSH key,
 Tailscale, an NDI KVM endpoint, and a USB media player** — so a PLAY can be reached and managed
 remotely, can drive the machine it is displaying, and can play video, stills and PDFs off a USB
-stick.
+stick. It can also carry **modules of your own**.
 
 **The package is assembled entirely in your browser.** Nothing is uploaded, no account is needed,
 and **you do not need your existing firmware file** — the generated package is a standalone overlay
@@ -36,7 +36,7 @@ involved, so there is nothing to upload and nothing to protect server-side.
 
 **This project contains no BirdDog firmware, no vendor keys, and no way to decrypt one.**
 
-> **Read the installer before you run it.** It is 200 lines of commented bash, it runs as root on
+> **Read the installer before you run it.** It is 500 lines of commented bash, it runs as root on
 > your device, and you should not take anyone's word for what it does.
 
 ---
@@ -50,6 +50,7 @@ involved, so there is nothing to upload and nothing to protect server-side.
 | `/userdata/bd-kvm/` | the KVM agent | **yes** — deliberately *not* the path the vendor updater deletes |
 | `/etc/systemd/system/bd-*.service` | units | yes |
 | `/userdata/bd-probe.txt` | first-boot hardware report | yes |
+| `/userdata/bd-modules.log` | one line per custom module the installer ran | yes |
 
 **Everything substantial lives on the `/userdata` partition.** The installer:
 
@@ -95,6 +96,32 @@ linking it — so no NDI code is redistributed.
 
 ---
 
+## Custom modules
+
+Under **Custom modules** you can add your own payloads. A module is a small `.tgz` holding a
+`module.conf` (its name and version) and an `install` script; the page reads it in your browser,
+checks that it is well-formed, and writes it into the package at `modules/<name>/`. On the device,
+the installer runs each module's `install` **as root**, after the payloads above.
+
+**Nothing about what `install` does is checked** — only that the archive is one the package
+format and the device can carry. Read what you package. Each chosen file is listed with a tick or
+the reason it was refused, and a refused file blocks the build rather than being dropped quietly.
+
+A module that fails, exits non-zero or hangs cannot leave the unit dark: the installer runs each
+one on its own, stops it after ten minutes (Debian's `timeout`, which stock PLAY firmware carries;
+without it a hang is not caught), logs the failure and carries on, so the step that restarts
+BirdDog's display still runs. What that cannot contain is a module that *deliberately* reboots,
+stops the display without restarting it, or kills the updater — it runs as root, and only reading
+it protects you from that. What every module printed is in `/tmp/bd-custom-install.log` on the
+device, and the probe report ends with one line per module and its exit code.
+
+To write one, start from the template at
+[github.com/stoatworks-labs/bd-play-module-template](https://github.com/stoatworks-labs/bd-play-module-template)
+and read *Building a module* on the site. A module built from the template can be removed with
+`bash /userdata/bd-<name>/uninstall` over SSH.
+
+---
+
 ## If something is wrong
 
 | Symptom | Cause |
@@ -104,3 +131,5 @@ linking it — so no NDI code is redistributed.
 | **Full-bandwidth NDI is unusable over the tailnet** | Userspace networking tops out around 195 Mbps. Use NDI|HX or SRT. |
 | **The KVM agent does nothing** | It forwards to the source the PLAY is *displaying*. Check what is on screen. |
 | **A vendor update removed something** | `/userdata/tailscale` is expected to survive but is not guaranteed; the KVM path is deliberately placed where the updater does not delete. |
+| **A module file is refused** | The message says why: a path over 100 bytes, a symlink, a binary that is not aarch64, a name that collides with a built-in payload, or no `install` at the root. Fix the module or remove the file; the build will not silently leave it out. |
+| **A module installed but its service is not running** | Its `install` reported a warning rather than failing the firmware install. Read `/tmp/bd-custom-install.log` and `journalctl -u bd-<name>` on the device. |

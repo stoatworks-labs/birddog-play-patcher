@@ -14,6 +14,7 @@
 
 import { readFile, writeFile, mkdir, readdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
 
@@ -23,7 +24,10 @@ const ASSETS = join(REPO, 'public/assets');
 const OUTDIR = process.argv[2] || join(HERE, 'out');
 
 const fw = await import(join(REPO, 'public/fw.js'));
-const { Tar, extractTailscale, sha256Hex, buildConf, validateKey, isArm64Elf, gunzip, parseTar } = fw;
+const {
+  Tar, extractTailscale, sha256Hex, buildConf, validateKey, isArm64Elf, gunzip, parseTar,
+  readModule, addModule,
+} = fw;
 
 let failures = 0;
 const check = (ok, msg) => {
@@ -71,6 +75,20 @@ check(/WITH_CAM="\$\{WITH_CAM:-0\}"/.test(updateSrc), 'installer defaults WITH_C
 check(/if \[ "\$WITH_CAM" = 1 \] && \[ -d/.test(updateSrc),
   'installer guards the camera block on both the flag and the directory');
 
+// Third-party modules run as root from modules/<name>/install. What matters is
+// that a broken one cannot stop the installer reaching the BirdDogRunner
+// restore: guarded on flag and directory, run in a subshell, exit logged.
+check(/WITH_MODULES="\$\{WITH_MODULES:-0\}"/.test(updateSrc), 'installer defaults WITH_MODULES to 0');
+check(/if \[ "\$WITH_MODULES" = 1 \] && \[ -d "\$SDIR\/modules" \]/.test(updateSrc),
+  'installer guards the modules block on both the flag and the directory');
+check(/\( cd "\$mdir" && [\s\S]*?bash \.\/install \)/.test(updateSrc),
+  'installer runs each module install in a subshell');
+check(/module \$\{mname\}: install exited \$\{mrc\} — continuing/.test(updateSrc),
+  'installer logs a failed module and continues');
+check(updateSrc.indexOf('modules/*/') < updateSrc.indexOf('systemctl start BirdDogRunner'),
+  'modules run before the BirdDogRunner restore');
+check(/export -f bd_log/.test(updateSrc), 'installer exports bd_log for modules');
+
 async function tailscaleTarball() {
   if (process.env.TS_TGZ) {
     console.log(`\ntailscale: using ${process.env.TS_TGZ}`);
@@ -96,7 +114,7 @@ tar.text('./authorized_keys',
 tar.text('./build.conf',
   buildConf({
     tag: 'citest', withTailscale: true, withTailscaleUi: true, withKvm: true,
-    withPlay: true, withCam: true, withCamUi: true, doReboot: false,
+    withPlay: true, withCam: true, withCamUi: true, withModules: true, doReboot: false,
   }), 0o644);
 
 const bins = await extractTailscale(await tailscaleTarball());
@@ -133,8 +151,23 @@ for (const [asset, dest] of [
   tar.file(dest, data, 0o755);
 }
 
-const blob = await tar.gzip();
+// A third-party module, packed by the SYSTEM tar from test/fixtures/module —
+// GNU tar in CI, bsdtar on a Mac — so readModule is exercised against a real
+// tar program's output rather than against fw.js writing for itself.
 await mkdir(OUTDIR, { recursive: true });
+const fixtureTgz = join(OUTDIR, 'citest-mod.tgz');
+execFileSync('tar', ['czf', fixtureTgz, '-C', join(HERE, 'fixtures'), 'module'],
+  { env: { ...process.env, COPYFILE_DISABLE: '1' } });
+console.log('\nfixture module (packed by the system tar):');
+const mod = await readModule(await readFile(fixtureTgz), 'citest-mod.tgz');
+check(mod.name === 'citest-mod' && mod.version === '0.0.1', `read as ${mod.name} ${mod.version}`);
+check(mod.files.map((f) => f.path).join(' ') === 'install module.conf payload/hello.txt',
+  'wrapping directory stripped, files sorted');
+check(mod.files.find((f) => f.path === 'install').mode === 0o755, 'install is 0755');
+check(mod.files.find((f) => f.path === 'payload/hello.txt').mode === 0o644, 'payload file is 0644');
+addModule(tar, mod);
+
+const blob = await tar.gzip();
 const out = join(OUTDIR, 'BirdDog_PLAY-custom-citest.fw');
 await writeFile(out, Buffer.from(await blob.arrayBuffer()));
 console.log(`\nwrote ${out} (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
@@ -152,9 +185,14 @@ for (const n of [
   './userdata/birddog-kvm/bdkvm', './userdata/birddog-kvm/run.sh',
   './userdata/bd-play/bdplay', './userdata/bd-play/bdpdf',
   './userdata/bd-play/libpdfium.so', './userdata/bd-play/mount.exfat-fuse',
+  './modules/citest-mod/install', './modules/citest-mod/module.conf',
+  './modules/citest-mod/payload/hello.txt',
 ]) {
   check(byName.has(n), `contains ${n}`);
 }
+check(Buffer.compare(Buffer.from(byName.get('./modules/citest-mod/install').data),
+  await readFile(join(HERE, 'fixtures/module/install'))) === 0,
+  './modules/citest-mod/install is byte-identical to the fixture');
 
 // Policy, not a bug hunt: mutool is AGPL v3. Serving it from this page would be
 // distribution, and §13 reaches users interacting over a network — which a
@@ -197,6 +235,12 @@ check(!/^WITH_CAM_UI=1$/m.test(conf) || /^WITH_CAM=1$/m.test(conf),
 const camOnly = buildConf({ tag: 't', withCam: false, withCamUi: true, doReboot: false });
 check(/^WITH_CAM_UI=0$/m.test(camOnly),
   'buildConf refuses the UVC tab when the converter is off');
+
+// The modules flag and directory travel together, in both directions.
+check(/^WITH_MODULES=1$/m.test(conf) === members.some((m) => m.name.startsWith('./modules/')),
+  'build.conf WITH_MODULES matches whether the package carries modules/');
+check(/^WITH_MODULES=0$/m.test(buildConf({ tag: 't', doReboot: false })),
+  'buildConf defaults WITH_MODULES to 0');
 
 console.log(failures ? `\n${failures} FAILED` : '\nall checks passed');
 process.exit(failures ? 1 : 0);

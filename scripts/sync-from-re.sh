@@ -16,7 +16,11 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
-RE="${1:-$HOME/Projects/birddog-re}"
+# The research repo lives outside ~/Projects; the sibling module repos moved
+# into ~/Projects/birddog-play/. First existing candidate wins.
+first_dir() { for d in "$@"; do [ -d "$d" ] && { echo "$d"; return; }; done; echo "$1"; }
+RE="${1:-$(first_dir "$HOME/reverse-engineering/video/birddog-re" "$HOME/Projects/birddog-re")}"
+SIBLINGS="$HOME/Projects/birddog-play"
 
 [ -d "$RE/tools/fwbuild/payload" ] || {
   echo "error: no birddog-re checkout at $RE" >&2
@@ -57,13 +61,13 @@ done
 # The UVC converter, same arrangement as bdplay: its own public repo
 # (github.com/stoatworks-labs/bdcam), source not vendored here, only the built
 # binary comes across for build-assets.sh.
-CAM="${BDCAM_REPO:-$HOME/Projects/bdcam}"
+CAM="${BDCAM_REPO:-$(first_dir "$SIBLINGS/bdcam" "$HOME/Projects/bdcam")}"
 if [ -f "$CAM/dist/bdcam-linux-arm64" ]; then
   mkdir -p "$REPO/converter/dist"
   copy "$CAM/dist/bdcam-linux-arm64" "$REPO/converter/dist/bdcam-linux-arm64"
 fi
 
-PLAY="${BDPLAY:-$HOME/Projects/bd-play-usb-player}"
+PLAY="${BDPLAY:-$(first_dir "$SIBLINGS/bd-play-usb-player" "$HOME/Projects/bd-play-usb-player")}"
 if [ -d "$PLAY/dist" ]; then
   mkdir -p "$REPO/player/dist"
   for f in bdplay-linux-arm64 bdpdf-linux-arm64 libpdfium.so mount.exfat-fuse-linux-arm64; do
@@ -83,7 +87,7 @@ fi
 # vendored here: bdts is its own public repo
 # (github.com/stoatworks-labs/bdts), so the page links to it and there is no
 # second copy to drift. Only the built binary comes across.
-TS_UI="${BDTS:-$HOME/Projects/bdts}"
+TS_UI="${BDTS:-$(first_dir "$SIBLINGS/bdts" "$HOME/Projects/bdts")}"
 if [ -f "$TS_UI/dist/bdts-linux-arm64" ]; then
   mkdir -p "$REPO/tailscale-ui/dist"
   copy "$TS_UI/dist/bdts-linux-arm64" "$REPO/tailscale-ui/dist/bdts-linux-arm64"
