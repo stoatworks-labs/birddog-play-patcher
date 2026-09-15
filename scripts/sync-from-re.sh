@@ -38,7 +38,7 @@ copy() { # src dst
   fi
 }
 
-for f in update probe.sh kvm-run.sh cam-run.sh cam-api-run.sh; do
+for f in update probe.sh kvm-run.sh cam-run.sh cam-api-run.sh gw-run.sh gw-api-run.sh; do
   copy "$RE/tools/fwbuild/payload/$f" "$REPO/installer/$f"
 done
 for f in "$RE"/tools/bdkvm/*.go "$RE"/tools/bdkvm/go.mod "$RE"/tools/bdkvm/go.sum; do
@@ -82,6 +82,21 @@ else
        "disabled in the UI. Set BDPLAY= to override." >&2
 fi
 
+# ----------------------------------------------------------------- gateway
+# The streaming gateway panel. Same arrangement as bdts: its own public repo
+# (github.com/stoatworks-labs/bd-play-stream-gateway), source not vendored
+# here, only the built binary comes across. MediaMTX itself is NOT synced or
+# committed anywhere in this repo — at 62 MB it is over the 25 MiB asset cap,
+# so the page fetches the pinned release through the Worker at build time.
+GW="${BDGW:-$(first_dir "$SIBLINGS/bd-play-stream-gateway" "$HOME/Projects/bd-play-stream-gateway")}"
+if [ -f "$GW/dist/bdgw-linux-arm64" ]; then
+  mkdir -p "$REPO/gateway/dist"
+  copy "$GW/dist/bdgw-linux-arm64" "$REPO/gateway/dist/bdgw-linux-arm64"
+else
+  echo "note: no bdgw build at $GW/dist — the streaming gateway option will be" \
+       "disabled in the UI. Set BDGW= to override." >&2
+fi
+
 # --------------------------------------------------------------------- bdts
 # The birdUI Tailscale panel. Like bdplay and unlike bdkvm, its SOURCE is not
 # vendored here: bdts is its own public repo
@@ -96,7 +111,7 @@ else
        "without the birdUI panel, so devices will need SSH to sign in." >&2
 fi
 
-chmod 755 "$REPO"/installer/* "$REPO"/agent/dist/* "$REPO"/player/dist/* "$REPO"/tailscale-ui/dist/* 2>/dev/null || true
+chmod 755 "$REPO"/installer/* "$REPO"/agent/dist/* "$REPO"/player/dist/* "$REPO"/tailscale-ui/dist/* "$REPO"/gateway/dist/* 2>/dev/null || true
 
 if [ "$changed" = 1 ]; then
   echo

@@ -67,6 +67,22 @@ stage_play PDF_LINE    bdpdf-linux-arm64       "$REPO/player/dist/bdpdf-linux-ar
 stage_play PDFLIB_LINE libpdfium.so            "$REPO/player/dist/libpdfium.so"                 "PDFium"
 stage_play EXFAT_LINE  mount.exfat-fuse        "$REPO/player/dist/mount.exfat-fuse-linux-arm64" "exFAT helper"
 
+# ------------------------------------------------------------- gateway
+# The streaming gateway panel, bdgw. MediaMTX itself is not an asset: at 62 MB
+# it is over the 25 MiB per-file cap, so the browser fetches the pinned release
+# through the Worker (src/worker.js) and verifies it against the SHA-256
+# GitHub publishes beside it. The version lives in the Worker; the manifest
+# only says whether the panel binary is here.
+GW_LINE=null
+stage_play GW_LINE bdgw-linux-arm64 "$REPO/gateway/dist/bdgw-linux-arm64" "streaming gateway panel"
+for f in gw-run.sh gw-api-run.sh; do
+  [ -f "$REPO/installer/$f" ] || { echo "error: missing installer/$f" >&2; exit 1; }
+  cp "$REPO/installer/$f" "$OUT/$f"
+done
+[ "$GW_LINE" = null ] && echo "warning: gateway/dist/bdgw-linux-arm64 missing" \
+  "(build bd-play-stream-gateway, then scripts/sync-from-re.sh) — the streaming" \
+  "gateway option will be disabled" >&2
+
 # --------------------------------------------------------------- bdts
 # The birdUI Tailscale panel. Ships with the Tailscale payload rather than as
 # its own option: without it a device installs Tailscale and then still needs
@@ -102,6 +118,9 @@ cat > "$OUT/manifest.json" <<EOF
   "camRun":    { "size": $(wc -c < "$OUT/cam-run.sh" | tr -d ' '),     "sha256": "$(sha "$OUT/cam-run.sh")" },
   "camApiRun": { "size": $(wc -c < "$OUT/cam-api-run.sh" | tr -d ' '), "sha256": "$(sha "$OUT/cam-api-run.sh")" },
   "bdts":   $BDTS_LINE,
+  "bdgw":   $GW_LINE,
+  "gwRun":    { "size": $(wc -c < "$OUT/gw-run.sh" | tr -d ' '),     "sha256": "$(sha "$OUT/gw-run.sh")" },
+  "gwApiRun": { "size": $(wc -c < "$OUT/gw-api-run.sh" | tr -d ' '), "sha256": "$(sha "$OUT/gw-api-run.sh")" },
   "bdplay": $PLAY_LINE,
   "bdpdf":  $PDF_LINE,
   "pdfium": $PDFLIB_LINE,

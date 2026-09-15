@@ -68,4 +68,22 @@ acceptance). Same `--module` contract in birddog-re's `build.sh`.
   tarfile read the Node copy; the template's install ran twice under the modules loop in a fake
   root (idempotent, config preserved, uninstall reverses it). NOT yet run on a PLAY.
 
+**Streaming gateway added 2026-09-15 (v0.3.0, beta, NOT run on a PLAY).** MediaMTX as a protocol
+hub plus bdgw from [bd-play-stream-gateway](https://github.com/stoatworks-labs/bd-play-stream-gateway)
+(binary synced into `gateway/dist/`); the picture reaches HDMI through PPApp's own SRT receiver on
+loopback, via the three files the stock AV Setup page writes. Design note and the reasoning are in
+that repo's README and NOTES.
+- **MediaMTX is fetched, not committed:** 62 MB unpacked is over the 25 MiB asset cap, and GitHub's
+  release host sends no CORS header, so `src/worker.js` gains `api/mediamtx/latest|tgz` — one
+  pinned version (`MEDIAMTX_VERSION`), the digest read from the published `checksums.sha256`, the
+  tarball streamed. The test reads the pin out of the Worker source so page and test cannot
+  disagree; `MTX_TGZ=` builds offline. The pin must match bd-play-stream-gateway's `render.go`
+  and birddog-re's `build.sh`.
+- The tab anchors where bdcam's does, so `videoset.html` now carries up to three marker-wrapped
+  patches (bdplay, bdcam, bdgw); coexistence in either order is tested in the gateway repo.
+- ATTRIBUTIONS gained MediaMTX via the fleet registry (stoatworks-backend ba5eb1e detects
+  `bluenviron/mediamtx/releases` in packaging code, the way Tailscale is detected).
+- `converter/dist/bdcam-linux-arm64` rebuilt from bdcam 859ac90 (zig 0.16, glibc floor 2.17): the
+  UVC tab gained a GATEWAY button that fills in `srt://127.0.0.1:8890?streamid=publish:cam`.
+
 Related: [compressionstream gzip engine variance](https://github.com/stoatworks-labs/fleet-notes/blob/main/notes/reference_compressionstream_gzip_engine_variance.md), **release workflow** (working-practice note, kept in Claude memory).

@@ -1,10 +1,11 @@
 # BirdDog PLAY Patcher user guide
 
 Builds an installable `.fw` for a [BirdDog PLAY](https://birddog.tv) that adds **an SSH key,
-Tailscale, an NDI KVM endpoint, a USB media player and a UVC converter** — so a PLAY can be
-reached and managed remotely, can drive the machine it is displaying, can play video, stills and
-PDFs off a USB stick, and can turn a USB camera into an NDI, SRT or HDMI source. It can also carry
-**modules of your own**.
+Tailscale, an NDI KVM endpoint, a USB media player, a UVC converter and a streaming gateway** —
+so a PLAY can be reached and managed remotely, can drive the machine it is displaying, can play
+video, stills and PDFs off a USB stick, can turn a USB camera into an NDI, SRT or HDMI source, and
+can take RTMP, RTSP, HLS, WebRTC and UDP streams onto its screen and send that camera back out the
+same ways. It can also carry **modules of your own**.
 
 **The package is assembled entirely in your browser.** Nothing is uploaded, no account is needed,
 and **you do not need your existing firmware file** — the generated package is a standalone overlay
@@ -80,6 +81,7 @@ component is a proxy for Tailscale's download host, which sends no CORS header.
 | `/userdata/bd-kvm/` | the KVM agent | **yes** — deliberately *not* the path the vendor updater deletes |
 | `/userdata/bd-play/` | the USB media player, PDF renderer and exFAT helper | expected |
 | `/userdata/bd-cam/` | the UVC converter and its settings API | expected |
+| `/userdata/bd-gw/` | the streaming gateway: MediaMTX, its panel and its settings | expected |
 | `/userdata/bd-<name>/` | each custom module, by convention | expected |
 | `/etc/systemd/system/bd-*.service` | units | yes |
 | `/userdata/bd-probe.txt` | first-boot hardware report | yes |
@@ -94,8 +96,8 @@ component is a proxy for Tailscale's download host, which sends no CORS header.
   bad install cannot break the boot chain**;
 - is idempotent, and does not reboot unless you ask it to.
 
-Two options edit one web UI page, `videoset.html`, to add themselves to it: the media player's
-**USB** source and the converter's **UVC Converter** tab. Each edit is marker-wrapped, backed up
+Three options edit one web UI page, `videoset.html`, to add themselves to it: the media player's
+**USB** source, the converter's **UVC Converter** tab and the gateway's **Streaming** tab. Each edit is marker-wrapped, backed up
 beside the file and exactly reversible, and the installer restarts the web UI afterwards, checks
 it came back as a new process and answers, and rolls the edit back if it did not. The Tailscale
 panel does the same to the System page.
@@ -173,6 +175,32 @@ puts in the stream.
 
 ---
 
+## Streaming gateway (beta)
+
+Makes the PLAY a streaming endpoint in both directions. **In:** push RTMP from OBS, vMix or an
+encoder to `rtmp://<play-ip>:1935/live`, pull an RTSP camera or an HLS playlist, publish WHIP from
+a browser, or receive MPEG-TS or RTP over UDP — and choose which of them is on the HDMI output.
+**Out:** the UVC converter's camera served over RTSP, RTMP, HLS, WebRTC and SRT, and pushed to
+YouTube, Twitch or any RTMP(S), RTSP, SRT or WHIP destination. Everything is set up on a
+**Streaming** tab in the web UI (or the same API on `http://<play-ip>:8093/`), which needs your
+birdUI login because it holds stream keys.
+
+The box runs [MediaMTX](https://github.com/bluenviron/mediamtx) as the hub. The picture reaches the
+screen through **the PLAY's own decoder**, which the tab points at the chosen path as an SRT source
+on loopback — so the OSD, tally and the rest of the web UI carry on as before, and if the hub
+stops, the PLAY simply behaves like a PLAY. To put the camera on the hub, set the UVC converter's
+SRT destination to the address the Streaming tab prints (`srt://127.0.0.1:8890?streamid=publish:cam`).
+
+**Why beta:** this option has **not yet run on a PLAY**. What it relies on is read out of the
+firmware and measured by the projects beside it, and its configuration is checked against the real
+MediaMTX in CI, but the decoder reading the hub's SRT over loopback is unproven until the test unit
+is back. Ports 1935, 8554, 8888, 8889 and 8890/udp are open with **no credentials**, exactly like
+the stock API on `:8080` — the LAN or the tailnet is the boundary. The decode limits are the chip's:
+H.264 to 1080p60 or 2160p30, HEVC to 2160p60; WebRTC publishers must send H.264. YouTube refuses
+video without audio, and the converter has none yet.
+
+---
+
 ## Custom modules
 
 Under **Custom modules** you can add your own payloads. A module is a small `.tgz` holding a
@@ -212,6 +240,9 @@ rm -rf /userdata/tailscale /userdata/bd-kvm /userdata/bd-tailscale-ui /etc/syste
 
 The media player and the converter restore their page edits with `bdplay -unpatch-ui` and
 `bdcam --unpatch-ui`; a module built from the template leaves `bash /userdata/bd-<name>/uninstall`.
+For the gateway, clear **Show on HDMI** in its tab first so the decoder is handed back, then
+`/userdata/bd-gw/bdgw --unpatch-ui && systemctl restart BirdDogWebUI`,
+`systemctl disable --now bd-mtx bd-gw` and `rm -rf /userdata/bd-gw /etc/systemd/system/bd-{mtx,gw}.service`.
 
 Then reflash stock firmware if you want a clean unit. Recovery-mode flashing of the factory image
 is a proven path, but it restores **factory** state — not this unit's provisioned serial, hostname
@@ -229,6 +260,8 @@ or `/userdata`.
 | **Full-bandwidth NDI is unusable over the tailnet** | Userspace networking tops out around 195 Mbps. Use NDI|HX or SRT. |
 | **The KVM agent does nothing** | It forwards to the source the PLAY is *displaying*, and needs a keyboard or mouse on the USB-A port. Check what is on screen and what is plugged in. |
 | **A USB stick does not mount** | An exFAT stick needs the FUSE helper, which the page says whether your build carries. FAT32 and NTFS mount without it. |
+| **A stream is pushed to the PLAY but nothing is on screen** | Pick the path under **Show on HDMI** on the Streaming tab and press SWITCH — the decoder is only pointed at a path when you ask. If the tab shows the publisher connected and the screen stays black, the codec is outside the chip's limits (H.264 above 2160p30, or VP8/VP9/AV1 from a browser). |
+| **The Streaming tab says the device has no password** | Set a birdUI password on the System page; the tab refuses to hold stream keys behind a login that anyone can pass. |
 | **A USB camera never appears** | A UVC 1.5 camera is bound automatically by the converter; anything else, check `bd-probe.txt` for the USB topology and `journalctl -u bd-cam`. |
 | **A vendor update removed something** | `/userdata/tailscale` is expected to survive but is not guaranteed; the KVM path is deliberately placed where the updater does not delete. |
 | **A module file is refused** | The message says why: a path over 100 bytes, a symlink, a binary that is not aarch64, a name that collides with a built-in payload, or no `install` at the root. Fix the module or remove the file; the build will not silently leave it out. |
