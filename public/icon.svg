@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="BirdDog PLAY firmware package generator">
+  <rect width="32" height="32" rx="6" fill="#1c1b1a"/>
+  <g id="mark">
+    <!-- A firmware package, assembled rather than downloaded whole. -->
+    <path d="M16 5.2 26.2 10v12L16 26.8 5.8 22V10z" fill="none" stroke="#e08a55" stroke-width="1.8" stroke-linejoin="round"/>
+    <path d="M5.8 10 16 14.8 26.2 10" fill="none" stroke="#e08a55" stroke-width="1.5" opacity=".6"/>
+    <path d="M16 14.8v12" stroke="#e08a55" stroke-width="1.5" opacity=".6"/>
+  </g>
+</svg>

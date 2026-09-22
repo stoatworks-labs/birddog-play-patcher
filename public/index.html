@@ -6,6 +6,11 @@
 <meta name="robots" content="noindex">
 <title>BirdDog PLAY firmware package generator</title>
 <link rel="stylesheet" href="site.css">
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <!-- iOS ignores the manifest's icons entirely and wants a PNG of its own. -->
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <!-- Tints the status bar and the title bar once installed. -->
+  <meta name="theme-color" content="#fbfaf8" />
 </head>
 <body>
 <main>
@@ -340,5 +345,6 @@
 <script src="/support-footer.js" defer
         data-app="BirdDog PLAY Patcher"
         data-repo="https://github.com/stoatworks-labs/birddog-play-patcher"></script>
+<script src="/register-sw.js" defer></script>
 </body>
 </html>
