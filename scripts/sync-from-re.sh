@@ -12,15 +12,20 @@
 # Prints a diff and exits 1 if anything changed, so CI or a pre-release check can
 # catch a stale copy. Nothing here reaches into the research repo's firmware,
 # notes or keys — only the files that are already shipped to users.
+#
+# The module binaries are NOT synced. Until 2026-10-11 this script also copied
+# them in from sibling checkouts of bd-play-usb-player, bdcam,
+# bd-play-stream-gateway and bdts; those repos now live here as player/,
+# converter/, gateway/ and tailscale-ui/, and each one's build.sh writes
+# straight into the dist/ this repo commits. Build the module, test it, commit
+# its dist/ binary.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
-# The research repo lives outside ~/Projects; the sibling module repos moved
-# into ~/Projects/birddog-play/. First existing candidate wins.
+# The research repo lives outside ~/Projects. First existing candidate wins.
 first_dir() { for d in "$@"; do [ -d "$d" ] && { echo "$d"; return; }; done; echo "$1"; }
 RE="${1:-$(first_dir "$HOME/reverse-engineering/video/birddog-re" "$HOME/Projects/birddog-re")}"
-SIBLINGS="$HOME/Projects/birddog-play"
 
 [ -d "$RE/tools/fwbuild/payload" ] || {
   echo "error: no birddog-re checkout at $RE" >&2
@@ -47,71 +52,7 @@ done
 [ -f "$RE/tools/bdkvm/dist/bdkvm-linux-arm64" ] &&
   copy "$RE/tools/bdkvm/dist/bdkvm-linux-arm64" "$REPO/agent/dist/bdkvm-linux-arm64"
 
-# ------------------------------------------------------------------- bdplay
-# The USB media player. Unlike bdkvm, its SOURCE is not vendored here: bdplay
-# is its own public repo (github.com/stoatworks-labs/bd-play-usb-player), so the page can
-# link to it and there is no second copy to drift. Only the built binaries come
-# across, which is what build-assets.sh needs.
-#
-# mutool is deliberately absent. It is AGPL v3 — serving it from this page
-# would be distribution, and §13 reaches network users — and at 37 MB it
-# exceeds Cloudflare's 25 MiB per-file asset limit anyway. PDF here is PDFium
-# (BSD-3) via bdpdf. See bdplay's AGENTS.md.
-# -------------------------------------------------------------------- bdcam
-# The UVC converter, same arrangement as bdplay: its own public repo
-# (github.com/stoatworks-labs/bdcam), source not vendored here, only the built
-# binary comes across for build-assets.sh.
-CAM="${BDCAM_REPO:-$(first_dir "$SIBLINGS/bdcam" "$HOME/Projects/bdcam")}"
-if [ -f "$CAM/dist/bdcam-linux-arm64" ]; then
-  mkdir -p "$REPO/converter/dist"
-  copy "$CAM/dist/bdcam-linux-arm64" "$REPO/converter/dist/bdcam-linux-arm64"
-fi
-
-PLAY="${BDPLAY:-$(first_dir "$SIBLINGS/bd-play-usb-player" "$HOME/Projects/bd-play-usb-player")}"
-if [ -d "$PLAY/dist" ]; then
-  mkdir -p "$REPO/player/dist"
-  for f in bdplay-linux-arm64 bdpdf-linux-arm64 libpdfium.so mount.exfat-fuse-linux-arm64; do
-    [ -f "$PLAY/dist/$f" ] && copy "$PLAY/dist/$f" "$REPO/player/dist/$f"
-  done
-  if [ -f "$PLAY/dist/mutool-linux-arm64" ] && [ -f "$REPO/player/dist/mutool-linux-arm64" ]; then
-    echo "error: mutool must never be shipped from this repo (AGPL v3)" >&2
-    exit 1
-  fi
-else
-  echo "note: no bdplay checkout at $PLAY — the USB media player option will be" \
-       "disabled in the UI. Set BDPLAY= to override." >&2
-fi
-
-# ----------------------------------------------------------------- gateway
-# The streaming gateway panel. Same arrangement as bdts: its own public repo
-# (github.com/stoatworks-labs/bd-play-stream-gateway), source not vendored
-# here, only the built binary comes across. MediaMTX itself is NOT synced or
-# committed anywhere in this repo — at 62 MB it is over the 25 MiB asset cap,
-# so the page fetches the pinned release through the Worker at build time.
-GW="${BDGW:-$(first_dir "$SIBLINGS/bd-play-stream-gateway" "$HOME/Projects/bd-play-stream-gateway")}"
-if [ -f "$GW/dist/bdgw-linux-arm64" ]; then
-  mkdir -p "$REPO/gateway/dist"
-  copy "$GW/dist/bdgw-linux-arm64" "$REPO/gateway/dist/bdgw-linux-arm64"
-else
-  echo "note: no bdgw build at $GW/dist — the streaming gateway option will be" \
-       "disabled in the UI. Set BDGW= to override." >&2
-fi
-
-# --------------------------------------------------------------------- bdts
-# The birdUI Tailscale panel. Like bdplay and unlike bdkvm, its SOURCE is not
-# vendored here: bdts is its own public repo
-# (github.com/stoatworks-labs/bdts), so the page links to it and there is no
-# second copy to drift. Only the built binary comes across.
-TS_UI="${BDTS:-$(first_dir "$SIBLINGS/bdts" "$HOME/Projects/bdts")}"
-if [ -f "$TS_UI/dist/bdts-linux-arm64" ]; then
-  mkdir -p "$REPO/tailscale-ui/dist"
-  copy "$TS_UI/dist/bdts-linux-arm64" "$REPO/tailscale-ui/dist/bdts-linux-arm64"
-else
-  echo "note: no bdts build at $TS_UI/dist — the Tailscale payload will install" \
-       "without the birdUI panel, so devices will need SSH to sign in." >&2
-fi
-
-chmod 755 "$REPO"/installer/* "$REPO"/agent/dist/* "$REPO"/player/dist/* "$REPO"/tailscale-ui/dist/* "$REPO"/gateway/dist/* 2>/dev/null || true
+chmod 755 "$REPO"/installer/* "$REPO"/agent/dist/* 2>/dev/null || true
 
 if [ "$changed" = 1 ]; then
   echo

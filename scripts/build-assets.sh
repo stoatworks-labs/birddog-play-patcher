@@ -80,7 +80,7 @@ for f in gw-run.sh gw-api-run.sh; do
   cp "$REPO/installer/$f" "$OUT/$f"
 done
 [ "$GW_LINE" = null ] && echo "warning: gateway/dist/bdgw-linux-arm64 missing" \
-  "(build bd-play-stream-gateway, then scripts/sync-from-re.sh) — the streaming" \
+  "(run gateway/build.sh) — the streaming" \
   "gateway option will be disabled" >&2
 
 # --------------------------------------------------------------- bdts
@@ -89,14 +89,14 @@ done
 # SSH to sign in, which is the gap it closes.
 stage_play BDTS_LINE bdts-linux-arm64 "$REPO/tailscale-ui/dist/bdts-linux-arm64" "Tailscale panel"
 [ "$BDTS_LINE" = null ] && echo "warning: tailscale-ui/dist/bdts-linux-arm64 missing" \
-  "(run bdts's build.sh, then scripts/sync-from-re.sh) — packages will install" \
+  "(run tailscale-ui/build.sh) — packages will install" \
   "Tailscale WITHOUT the birdUI panel, so signing in will need SSH" >&2
 
 [ "$CAM_LINE" = null ] && echo "warning: converter/dist/bdcam-linux-arm64 missing" \
-  "(build the bdcam repo, then scripts/sync-from-re.sh) — the UVC converter" \
+  "(run converter/build.sh) — the UVC converter" \
   "option will be disabled" >&2
 [ "$PLAY_LINE" = null ] && echo "warning: player/dist/bdplay-linux-arm64 missing" \
-  "(run bdplay's build.sh, then scripts/sync-from-re.sh) — the USB media player" \
+  "(run player/build.sh) — the USB media player" \
   "option will be disabled in the UI" >&2
 
 # Belt and braces against the one mistake that would matter: an AGPL binary
