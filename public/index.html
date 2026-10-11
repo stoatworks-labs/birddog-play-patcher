@@ -59,7 +59,8 @@
           NDI.</div>
         <div class="src">Source: the binaries are Tailscale's own,
           <a href="https://github.com/tailscale/tailscale">tailscale/tailscale</a> (BSD-3);
-          the birdUI panel is <a href="https://github.com/stoatworks-labs/bdts">stoatworks-labs/bdts</a> (MIT).</div>
+          the birdUI panel is <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/tailscale-ui">tailscale-ui/</a>
+          in this repo (MIT).</div>
       </div>
     </div>
     <div class="opt" id="kvmRow">
@@ -100,8 +101,8 @@
           <br>
           <span id="playExtras"></span>
         </div>
-        <div class="src">Source: <a href="https://github.com/stoatworks-labs/bd-play-usb-player">stoatworks-labs/bd-play-usb-player</a>
-          (MIT), plus PDFium and fuse-exfat as credited below.</div>
+        <div class="src">Source: <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/player">player/</a>
+          in this repo (MIT), plus PDFium and fuse-exfat as credited below.</div>
       </div>
     </div>
     <div class="opt" id="camRow">
@@ -139,8 +140,8 @@
             port 8090 rather than in the UI.
           </label>
         </div>
-        <div class="src">Source: <a href="https://github.com/stoatworks-labs/bdcam">stoatworks-labs/bdcam</a> (MIT) — Go,
-          against the device's own GStreamer and <code>libndi</code>.</div>
+        <div class="src">Source: <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/converter">converter/</a>
+          in this repo (MIT) — Go, against the device's own GStreamer and <code>libndi</code>.</div>
       </div>
     </div>
     <div class="opt" id="gatewayRow">
@@ -184,7 +185,7 @@
             runs; its settings are just on port 8093 rather than in the UI.
           </label>
         </div>
-        <div class="src">Source: <a href="https://github.com/stoatworks-labs/bd-play-stream-gateway">stoatworks-labs/bd-play-stream-gateway</a> (MIT) — Go;
+        <div class="src">Source: <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/gateway">gateway/</a> in this repo (MIT) — Go;
           the hub is <a href="https://github.com/bluenviron/mediamtx">bluenviron/mediamtx</a> (MIT),
           fetched here at build time and checked against its published SHA-256.</div>
       </div>
@@ -225,7 +226,7 @@
        <strong>as root</strong> after the payloads above. Each file is read and checked here the
        moment you choose it — structure only, never what <code>install</code> does.
        <strong>Read what you package.</strong> <a href="modules.html">How to build one</a>, or start
-       from <a href="https://github.com/stoatworks-labs/bd-play-module-template">bd-play-module-template</a>.</p>
+       from <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/module-template">the module template</a>.</p>
 
     <div class="row">
       <button id="build">Build package</button>
@@ -294,19 +295,21 @@
     <p><strong>Read the installer before you run it.</strong> It runs as root on your device and
        it is 500 lines of commented bash — you should not take anyone's word for what it does:
        <a href="https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/installer/update">installer/update</a>.
-       Source for the whole tool, including the on-device KVM agent, is at
-       <a href="https://github.com/stoatworks-labs/birddog-play-patcher">github.com/stoatworks-labs/birddog-play-patcher</a>,
-       the USB media player is at
-       <a href="https://github.com/stoatworks-labs/bd-play-usb-player">github.com/stoatworks-labs/bd-play-usb-player</a>,
-       the UVC converter at
-       <a href="https://github.com/stoatworks-labs/bdcam">github.com/stoatworks-labs/bdcam</a>,
-       the birdUI Tailscale panel at
-       <a href="https://github.com/stoatworks-labs/bdts">github.com/stoatworks-labs/bdts</a>,
-       and the streaming gateway at
-       <a href="https://github.com/stoatworks-labs/bd-play-stream-gateway">github.com/stoatworks-labs/bd-play-stream-gateway</a> (all MIT).
+       Source for the whole tool is at
+       <a href="https://github.com/stoatworks-labs/birddog-play-patcher">github.com/stoatworks-labs/birddog-play-patcher</a>
+       (all MIT), and that includes everything it installs on the device: the KVM agent in
+       <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/agent">agent/</a>,
+       the USB media player in
+       <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/player">player/</a>,
+       the UVC converter in
+       <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/converter">converter/</a>,
+       the birdUI Tailscale panel in
+       <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/tailscale-ui">tailscale-ui/</a>
+       and the streaming gateway in
+       <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/gateway">gateway/</a>.
        Want to add your own? <a href="modules.html">Building a module</a> explains the format the
        installer runs, and
-       <a href="https://github.com/stoatworks-labs/bd-play-module-template">bd-play-module-template</a>
+       <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/module-template">module-template/</a>
        is a working one to start from.</p>
     <p>The package you download contains the official
        <a href="https://tailscale.com">Tailscale</a> arm64 binaries, redistributed unmodified
@@ -329,8 +332,8 @@
        Nayenko) linked against <a href="https://github.com/libfuse/libfuse">libfuse</a>
        (LGPL v2.1). <strong>Both are copyleft, so their corresponding source is offered:</strong>
        each is built unmodified from the upstream release by
-       <a href="https://github.com/stoatworks-labs/bd-play-usb-player/blob/main/tools/build-exfat.sh">tools/build-exfat.sh</a>
-       and <a href="https://github.com/stoatworks-labs/bd-play-usb-player/blob/main/bdpdf/build.sh">bdpdf/build.sh</a>,
+       <a href="https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/player/tools/build-exfat.sh">player/tools/build-exfat.sh</a>
+       and <a href="https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/player/bdpdf/build.sh">player/bdpdf/build.sh</a>,
        which name the exact versions and flags used. Full credits in
        <a href="https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/ATTRIBUTIONS.md">ATTRIBUTIONS.md</a>.</p>
     <p>Not affiliated with or endorsed by BirdDog. Installing this will not do your warranty

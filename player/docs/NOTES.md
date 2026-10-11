@@ -9,6 +9,8 @@ Cross-cutting notes that are not specific to this repo live in
 
 *bd-play-usb-player (bdplay) - USB media player for the BirdDog PLAY; PUBLIC repo, shipped by the PLAY Patcher, working on hardware*
 
+**Moved 2026-10-11:** this is now `player/` in [birddog-play-patcher](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/player), history included; the old stoatworks-labs/bd-play-usb-player repo carries a pointer. Paths and "this repo" below are as they were written. birddog-re's fwbuild now takes the binary from a patcher checkout at `player/dist/bdplay-linux-arm64`, and the patcher commits and serves that file directly — there is no sync step any more.
+
 `~/Projects/bd-play-usb-player` — **PUBLIC** (github.com/stoatworks-labs/**bd-play-usb-player**,
 MIT, branch `main`), USB media player for the BirdDog PLAY. **Shipped by
 [birddog play patcher](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/docs/NOTES.md) (`birddog-play-patcher`)** as its "USB media player" checkbox — the
@@ -39,12 +41,12 @@ FROM DISK ON EVERY REQUEST.** Verified by editing it and seeing the change
 served with no restart, no recompile. So the USB option is just added to the
 file.
 > **DISPUTED 2026-08-13 — do not rely on this without re-testing.**
-> [bdcam](https://github.com/stoatworks-labs/bdcam/blob/main/docs/NOTES.md) (`bdcam`)'s UVC tab landed the opposite hardware observation on a
+> [bdcam](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/converter/docs/NOTES.md) (`bdcam`)'s UVC tab landed the opposite hardware observation on a
 > structurally identical template: the tab only appeared after restarting the
 > right unit (`BirdDogWebUI`, not `birddog-web-ui`), which reads as parsed at
 > STARTUP. Both are hardware observations. Until it is settled, assume a restart
 > is needed and use a health check with rollback — correct under either answer.
-> See [bdts](https://github.com/stoatworks-labs/bdts/blob/main/docs/NOTES.md) (`bdts`).
+> See [bdts](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/tailscale-ui/docs/NOTES.md) (`bdts`).
 - **You CANNOT make the stock handler understand "USB".** `birddog-web-ui`
   validates `SourceSelection` against its own NDI/CloudConnect/SRT allowlist,
   and the Express API on :8080 validates every other `/decodesetup` field but

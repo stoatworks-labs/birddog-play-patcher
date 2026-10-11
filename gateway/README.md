@@ -10,7 +10,7 @@
 - **In:** push RTMP from OBS, vMix or a hardware encoder; pull RTSP from IP cameras and
   NVRs; pull an HLS playlist; publish WebRTC/WHIP from a browser; receive MPEG-TS or RTP
   over UDP — and put any of it on the HDMI output.
-- **Out:** serve the USB camera that [bdcam](https://github.com/stoatworks-labs/bdcam)
+- **Out:** serve the USB camera that [bdcam](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/converter)
   captures over RTSP, RTMP, HLS, WebRTC and SRT, and push it to YouTube, Twitch or any
   RTMP(S), RTSP, SRT or WHIP destination.
 
@@ -155,7 +155,8 @@ go test ./...         # config, renderer, decoder files, birdUI patch, API — a
 CI also fetches the pinned MediaMTX release (checksum-verified) and runs its
 `--validate-conf` over every configuration the renderer produces, because the key names
 are MediaMTX's and change between releases. The pin lives in `render.go`
-(`MediaMTXVersion`) and `.github/workflows/ci.yml`; the patcher pins the same version.
+(`MediaMTXVersion`) and in the patcher's `src/worker.js`, which the patcher's CI reads and
+checks against `render.go`.
 
 To test the patch against the genuine page, copy a device's
 `/srv/birddog-web-ui/videoset.html` to `testdata/firmware/videoset.<version>.html`

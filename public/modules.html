@@ -45,7 +45,8 @@
   <p>You hand the generator a <code>.tgz</code> of that directory under <strong>Custom
      modules</strong>. It is read in this browser (nothing is uploaded anywhere), checked, and
      written into the <code>.fw</code> at <code>./modules/&lt;name&gt;/</code>. The quickest way
-     to a working one is <a href="https://github.com/stoatworks-labs/bd-play-module-template">bd-play-module-template</a>:
+     to a working one is <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/module-template">module-template/</a>
+     in this tool's repo:
      a complete module that installs a heartbeat service, with every line of its
      <code>install</code> commented.</p>
 
@@ -211,21 +212,24 @@ node scripts/patcher-accepts.mjs dist/*.tgz  # the generator's reader, same mess
   </ol>
 
   <h2 id="examples">Worked examples</h2>
-  <p>Every payload this generator ships is a module in all but packaging, and each is public:</p>
+  <p>Every payload this generator ships is a module in all but packaging, and the source of each
+     is in this tool's repo:</p>
   <ul>
-    <li><a href="https://github.com/stoatworks-labs/bd-play-module-template">bd-play-module-template</a>
+    <li><a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/module-template">module-template/</a>
         — the starting point: a heartbeat service, <code>install</code>, <code>uninstall</code>,
         <code>build.sh</code>, <code>check.sh</code> and CI.</li>
-    <li><a href="https://github.com/stoatworks-labs/bdts">bdts</a> — patches a web UI page with a
+    <li><a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/tailscale-ui">tailscale-ui/</a>
+        (bdts) — patches a web UI page with a
         health check and rollback; the pattern to copy if you must touch the UI.</li>
-    <li><a href="https://github.com/stoatworks-labs/bdcam">bdcam</a> — a self-supervising unit
+    <li><a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/converter">converter/</a>
+        (bdcam) — a self-supervising unit
         that exits 0 with no camera attached, a separate settings-API unit, and a config kept
         across reinstalls.</li>
-    <li><a href="https://github.com/stoatworks-labs/bd-play-usb-player">bd-play-usb-player</a>
-        — a static Go binary taking the display from <code>BirdDogRunner</code> and giving it
+    <li><a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/player">player/</a>
+        (bdplay) — a static Go binary taking the display from <code>BirdDogRunner</code> and giving it
         back on every exit path.</li>
     <li><a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/agent">agent/</a>
-        in this repo — bdkvm, and <a href="https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/installer/update"><code>installer/update</code></a>,
+        — bdkvm, and <a href="https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/installer/update"><code>installer/update</code></a>,
         the installer itself. Its <code>modules</code> section is the code that runs yours; read
         it before you rely on anything written here.</li>
   </ul>

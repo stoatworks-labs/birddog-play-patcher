@@ -193,13 +193,14 @@ The gate treats any 3xx as unauthenticated, which is why that works.
 
 ## Where this sits
 
-`bdts` is a sibling checkout alongside `bdcam` and `bd-play-usb-player`. The
+`bdts` lives in `tailscale-ui/` of the PLAY Patcher's repo, beside `converter/`
+(bdcam) and `player/` (bdplay); until 2026-10-11 it was its own repo. The
 firmware packager in `birddog-re/tools/fwbuild` installs it as part of the
 Tailscale payload — not behind a separate flag, because a Tailscale install that
 still requires SSH to finish is the problem this solves.
 
 The reverse engineering that justifies the claims here lives in `birddog-re`,
-which is **local-only and must stay that way**: its history contains a recovered
+which is **private and must stay that way**: its history contains a recovered
 vendor AES key and decrypted firmware. Do not copy key material or vendor
 firmware into this repo.
 

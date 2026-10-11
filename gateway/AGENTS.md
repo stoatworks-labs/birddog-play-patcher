@@ -2,23 +2,26 @@
 
 The Streaming gateway for the **BirdDog PLAY** (Rockchip RK3328, quad A53, Debian 10
 aarch64): MediaMTX as the protocol hub, and `bdgw`, this Go program, as the panel around
-it. Cross-compiled for the device, no cgo. **Public repo.**
+it. Cross-compiled for the device, no cgo. **Public** — `gateway/` of the birddog-play-patcher
+repo.
 
 Start with [`README.md`](README.md) — it carries the design, the security argument and
 the hardware list that is still outstanding. This file is the operating rules.
 
 ## Where this sits
 
-`bd-play-stream-gateway` is the canonical, standalone home of `bdgw`, alongside `bdcam`,
-`bdts` and `bd-play-usb-player` as sibling checkouts under `~/Projects/birddog-play`. The
-reverse engineering that justifies every claim in the README lives in `birddog-re` — a
-**private** research repo whose history carries a recovered vendor AES key and a decrypted
-firmware blob. Never copy key material or vendor firmware into this repo.
+`gateway/` is the canonical home of `bdgw` (until 2026-10-11 it was its own repo,
+stoatworks-labs/bd-play-stream-gateway), beside `converter/` (bdcam), `tailscale-ui/` (bdts)
+and `player/` (bdplay) in the patcher. The reverse engineering that justifies every claim
+in the README lives in `birddog-re` — a **private** research repo whose history carries a
+recovered vendor AES key and a decrypted firmware blob. Never copy key material or vendor firmware into this repo.
 
-`birddog-re`'s `tools/fwbuild` finds this repo's binary at
-`../bd-play-stream-gateway/dist/bdgw-linux-arm64` (override with `BDGW=`) and fetches the
-pinned MediaMTX release itself. The public patcher syncs `dist/` and fetches MediaMTX in
-the browser through its Worker proxy. The binary name, the unit prefix and the install
+`birddog-re`'s `tools/fwbuild` finds this binary in a patcher checkout, at
+`gateway/dist/bdgw-linux-arm64` (override with `BDGW=`, or point `PATCHER=` at the
+checkout), and fetches the pinned MediaMTX release itself. The patcher serves the committed
+`dist/` binary as-is — `./build.sh` rebuilds it — and fetches MediaMTX in the browser
+through its Worker proxy, at the version `src/worker.js` pins; CI fails if `render.go`
+names another. The binary name, the unit prefix and the install
 directory are all `bd-gw`; the hub's unit is `bd-mtx`.
 
 ## Hard rules
@@ -45,7 +48,8 @@ directory are all `bd-gw`; the hub's unit is `bd-mtx`.
 6. **Only emit MediaMTX keys that CI has validated.** The renderer writes MediaMTX's own
    key names and they change between releases. Any new key goes into a fixture in
    `render_test.go`, so CI's `--validate-conf` run against the pinned binary proves it.
-   Bump `MediaMTXVersion` in `render.go` and the workflow together.
+   Bump `MediaMTXVersion` in `render.go` and `MEDIAMTX_VERSION` in the patcher's
+   `src/worker.js` together — CI reads the pin from the Worker and fails if they differ.
 7. **Restart the decoder only when the selection changes.** Every `BirdDogRunner` restart
    is one bd-play-usb-player measured as destabilising. `apply` in `serve.go` compares
    before and after; keep it that way.

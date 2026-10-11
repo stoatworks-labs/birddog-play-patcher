@@ -14,7 +14,15 @@ TS_TGZ=/path/to/tailscale_x_arm64.tgz node test/build-package.mjs   # offline
 MTX_TGZ=/path/to/mediamtx_vX_linux_arm64.tar.gz node test/build-package.mjs   # offline, the gateway half
 scripts/sync-from-re.sh [path]   # pull installer/agent from the research repo; exits 1 on change
 agent/build.sh                   # rebuild bdkvm for linux/arm64 (needs Go + a cross toolchain)
+player/build.sh                  # rebuild bdplay into player/dist/ (CGO_ENABLED=0, no zig)
+converter/build.sh               # rebuild bdcam into converter/dist/ (needs zig, glibc 2.28 pin)
+gateway/build.sh                 # vet, test, check the tab script, rebuild bdgw into gateway/dist/
+tailscale-ui/build.sh            # vet, test, check the panel script, rebuild bdts into tailscale-ui/dist/
+module-template/build.sh && node module-template/scripts/patcher-accepts.mjs module-template/dist/*.tgz
 ```
+
+Each module folder has its own `AGENTS.md` — read it before changing that folder. A rebuilt
+`dist/` binary is what ships, so commit one only after it has run on a unit.
 
 ## Deploy
 

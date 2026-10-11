@@ -9,6 +9,8 @@ Cross-cutting notes that are not specific to this repo live in
 
 *bdts — Tailscale sign-in and settings on birdUI's System page for the BirdDog PLAY; PUBLIC repo, LIVE in the Patcher, running on unit .42*
 
+**Moved 2026-10-11:** this is now `tailscale-ui/` in [birddog-play-patcher](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/tailscale-ui), history included; the old stoatworks-labs/bdts repo carries a pointer. Paths and "this repo" below are as they were written. birddog-re's fwbuild now takes the binary from a patcher checkout at `tailscale-ui/dist/bdts-linux-arm64`, and the patcher commits and serves that file directly — there is no sync step any more.
+
 `~/Projects/bdts` — **PUBLIC** (github.com/stoatworks-labs/**bdts**, MIT, branch
 `main`), **LIVE 2026-08-13**: shipped by [birddog play patcher](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/docs/NOTES.md) (`birddog-play-patcher`) with
 the Tailscale payload, and installed and running on unit `.42`. Adds a **Tailscale** panel to birdUI's
@@ -58,7 +60,7 @@ version might not ship.**
 
 **That page carries the System Update form** — the firmware-upload recovery path
 — so a parse failure takes the way back with it. Same mitigations as
-[bdcam](https://github.com/stoatworks-labs/bdcam/blob/main/docs/NOTES.md) (`bdcam`)'s UVC tab: tested Go patch, markers, refuse unfamiliar markup,
+[bdcam](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/converter/docs/NOTES.md) (`bdcam`)'s UVC tab: tested Go patch, markers, refuse unfamiliar markup,
 `.bdts-stock` backup, atomic write, plus installer health check requiring the
 **pid to change** (unit is `BirdDogWebUI`; `birddog-web-ui` is the binary).
 Inserted block is one empty div + one script tag with **zero template actions**,
@@ -67,7 +69,7 @@ asserted by counting `{{`/`}}` and by parsing the patched file with
 
 **Port map on the device — 8091 was already taken:** 80 birdUI, 8080 BirdDog's
 own unauthenticated API, 8090 `bd-cam-api`, **8091 `bd-play`**
-([bdplay](https://github.com/stoatworks-labs/bd-play-usb-player/blob/main/docs/NOTES.md) (`bd-play-usb-player`)), so bdts took **8092**. A collision is silent: the second
+([bdplay](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/player/docs/NOTES.md) (`bd-play-usb-player`)), so bdts took **8092**. A collision is silent: the second
 service fails to bind and its panel just never answers.
 
 **Auth is where this departs from bdcam.** bdcam documents its API as
@@ -89,7 +91,7 @@ persistent remote access. Writes are gated on a birdUI session; reads stay open.
   table. Routes in there: `/login`, `/logout`, `/auth`, `/dashboard`,
   `/videoset`, `/settings`.
 
-**Unresolved contradiction worth settling on hardware:** [bdplay](https://github.com/stoatworks-labs/bd-play-usb-player/blob/main/docs/NOTES.md) (`bd-play-usb-player`)
+**Unresolved contradiction worth settling on hardware:** [bdplay](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/player/docs/NOTES.md) (`bd-play-usb-player`)
 records `videoset.html` as parsed **from disk on every request** (verified by
 editing and seeing it served); bdcam's commit records it as parsed **at startup**
 (the tab only appeared after restarting the right unit). Both are hardware

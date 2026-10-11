@@ -10,6 +10,8 @@ Cross-cutting notes that are not specific to this repo live in
 *bd-play-stream-gateway (bdgw) — MediaMTX as a protocol hub on the BirdDog PLAY, with a
 Streaming tab; PUBLIC repo; built 2026-09-15, NOT YET RUN ON A PLAY*
 
+**Moved 2026-10-11:** this is now `gateway/` in [birddog-play-patcher](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/gateway), history included; the old stoatworks-labs/bd-play-stream-gateway repo carries a pointer. Paths and "this repo" below are as they were written. birddog-re's fwbuild now takes the binary from a patcher checkout at `gateway/dist/bdgw-linux-arm64`, and the patcher commits and serves that file directly — there is no sync step any more.
+
 **Why a hub and not a stack (decided 2026-09-15).** PPApp already receives SRT with its
 own TS demuxer, fdk-AAC and Opus decoders and MPP for H.264/HEVC (strings in the 1.0.34
 `bin/PPApp`). So every new protocol only has to become SRT on loopback. MediaMTX v1.21.0
@@ -43,12 +45,14 @@ destabilising PPApp) and is kept only as the fallback if PPApp refuses MediaMTX'
   and `api/openapi.yaml`. CI fetches the pinned linux_amd64 release, checks the published
   SHA-256, and runs `--validate-conf` over every fixture the tests render — that is the
   only proof the yml loads. Bump `render.go`, `ci.yml`, fwbuild and the patcher together.
+  (Since the 2026-10-11 move into the patcher, CI reads the pin from `src/worker.js`, so it is
+  `render.go`, the Worker and fwbuild.)
 
 **Hardware list (nothing done):** PPApp ↔ gosrt loopback interop (the load-bearing one;
 fallback is PPApp listener + MediaMTX `forward:`), idle-path behaviour (`hold_picture` =
 `alwaysAvailable` is in the tab, unverified), audio through the loopback, hot reload on an
 atomic rename, CPU with WebRTC/HLS readers, the cookie reaching :8093.
 
-Related: [bdcam](https://github.com/stoatworks-labs/bdcam/blob/main/docs/NOTES.md),
-[bdts](https://github.com/stoatworks-labs/bdts/blob/main/docs/NOTES.md),
+Related: [bdcam](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/converter/docs/NOTES.md),
+[bdts](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/tailscale-ui/docs/NOTES.md),
 [birddog play patcher](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/docs/NOTES.md).

@@ -220,8 +220,8 @@ stops the display without restarting it, or kills the updater — it runs as roo
 it protects you from that. What every module printed is in `/tmp/bd-custom-install.log` on the
 device, and the probe report ends with one line per module and its exit code.
 
-To write one, start from the template at
-[github.com/stoatworks-labs/bd-play-module-template](https://github.com/stoatworks-labs/bd-play-module-template)
+To write one, start from the template in
+[module-template/](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/module-template)
 and read *Building a module* on the site. A module built from the template can be removed with
 `bash /userdata/bd-<name>/uninstall` over SSH.
 

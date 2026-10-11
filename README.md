@@ -10,9 +10,9 @@
 
 Builds an installable `.fw` for a [BirdDog PLAY](https://birddog.tv) that adds an SSH key,
 [Tailscale](https://tailscale.com), an NDI KVM endpoint, a
-[USB media player](https://github.com/stoatworks-labs/bd-play-usb-player), a
-[UVC converter](https://github.com/stoatworks-labs/bdcam) and a
-[streaming gateway](https://github.com/stoatworks-labs/bd-play-stream-gateway) — so a PLAY can be
+[USB media player](player/), a
+[UVC converter](converter/) and a
+[streaming gateway](gateway/) — so a PLAY can be
 reached and managed remotely, can drive the machine it is displaying, can play video, stills
 and PDFs off a USB stick, can turn a USB camera into NDI, and can take RTMP, RTSP, HLS, WebRTC
 and UDP streams onto its HDMI output and send that camera back out the same ways. It also takes **modules of your own**: a `.tgz` with an `install` script that the
@@ -115,7 +115,7 @@ rather than linking it — so no NDI code is redistributed here.
 
 ## Streaming gateway (beta)
 
-[bd-play-stream-gateway](https://github.com/stoatworks-labs/bd-play-stream-gateway) puts
+The gateway ([`gateway/`](gateway/), bdgw) puts
 [MediaMTX](https://github.com/bluenviron/mediamtx) on the box as a protocol hub — RTMP, RTSP,
 HLS, WebRTC/WHIP, SRT and UDP in; RTSP, RTMP, HLS, WebRTC and SRT served; RTMP(S), RTSP, SRT
 and WHIP pushed out — and adds a **Streaming** tab to the web UI. The picture reaches HDMI
@@ -128,12 +128,12 @@ is on every protocol the hub speaks.
 MediaMTX is 62 MB unpacked — over the 25 MiB static-asset cap — so the page fetches the
 **pinned** release through the Worker (GitHub's release host sends no CORS header, like
 `pkgs.tailscale.com`) and checks it against the `checksums.sha256` published beside it. The
-pin lives in [`src/worker.js`](src/worker.js); the gateway repo validates its rendered
-configuration against exactly that version in CI, and birddog-re's `fwbuild` stages the same
-one — bump all three together.
+pin lives in [`src/worker.js`](src/worker.js); CI reads it from there, fails if
+`gateway/render.go` names another, and validates the gateway's rendered configuration against
+exactly that release; birddog-re's `fwbuild` stages the same one — bump all three together.
 
 **Not yet run on a PLAY.** Ports 1935, 8554, 8888, 8889 and 8890/udp open with no credentials,
-exactly like the stock API on `:8080`. Read the gateway repo's README for the ceilings (H.264
+exactly like the stock API on `:8080`. Read [`gateway/README.md`](gateway/README.md) for the ceilings (H.264
 to 1080p60/2160p30, HEVC to 2160p60; WebRTC must send H.264) and the hardware list.
 
 ## Custom modules
@@ -156,7 +156,7 @@ about what `install` does. That is the author's business, and the page says so.
 
 The contract — environment, `bd_log`, the rules that keep a unit recoverable — is written up at
 [`/modules.html`](https://birddog-play-patcher.stoatworks-labs.com/modules.html), and
-[bd-play-module-template](https://github.com/stoatworks-labs/bd-play-module-template) is a
+[`module-template/`](module-template/) is a
 complete working module to start from, with a `build.sh` and CI that prove the generator will
 accept what it produces. The CLI builder in the research repo takes the same archives with
 `--module`, so the two builders cannot disagree about what a valid module is.
@@ -170,6 +170,21 @@ node test/build-package.mjs  # build a package in Node and verify its structure
 MTX_TGZ=/path/to/mediamtx_v1.21.0_linux_arm64.tar.gz node test/build-package.mjs   # offline
 node test/modules.mjs        # read module archives written by the system tar
 ```
+
+Everything the package installs on the device has its source here. Each Go program is its
+own module with its own `build.sh`, which writes the `dist/` binary this repo commits and the
+page serves — build, test on a unit, then commit the binary:
+
+| Folder | Program | Guide |
+|---|---|---|
+| [`agent/`](agent/) | bdkvm, the NDI KVM endpoint (synced from the research repo) | — |
+| [`player/`](player/) | bdplay, the USB media player, plus the PDFium and exFAT helpers | [`player/docs/USER-GUIDE.md`](player/docs/USER-GUIDE.md) |
+| [`converter/`](converter/) | bdcam, the UVC converter (its `build.sh` needs zig) | [`converter/README.md`](converter/README.md) |
+| [`gateway/`](gateway/) | bdgw, the streaming gateway panel | [`gateway/README.md`](gateway/README.md) |
+| [`tailscale-ui/`](tailscale-ui/) | bdts, the birdUI Tailscale panel | [`tailscale-ui/docs/USER-GUIDE.md`](tailscale-ui/docs/USER-GUIDE.md) |
+| [`module-template/`](module-template/) | a working third-party module to start from | [`module-template/README.md`](module-template/README.md) |
+
+Until 2026-10-11 the last five were separate repositories; their history came with them.
 
 `public/fw.js` holds the archive logic and is deliberately free of DOM and network calls, so
 the Node test exercises the exact module the browser runs rather than a reimplementation. The

@@ -447,7 +447,7 @@
         Object.keys(s.ports || {}).map(function (k) { return k + ' ' + s.ports[k]; }).join(', ') +
         '. No credentials on any of them: the LAN or the tailnet is the boundary, exactly as for the PLAY’s own API. ' +
         'Gateway by <a href="https://github.com/bluenviron/mediamtx" target="_blank" rel="noopener">MediaMTX</a> (MIT); tab by ' +
-        '<a href="https://github.com/stoatworks-labs/bd-play-stream-gateway" target="_blank" rel="noopener">bd-play-stream-gateway</a> ' + esc(s.version || '') + '.</div>');
+        '<a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/gateway" target="_blank" rel="noopener">bd-play-stream-gateway</a> ' + esc(s.version || '') + '.</div>');
     document.getElementById('bdgw_right').innerHTML = right;
     var b = document.getElementById('bdgw_showlog');
     if (b) b.addEventListener('click', function () { showLog(); renderRight(); });

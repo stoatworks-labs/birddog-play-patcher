@@ -28,7 +28,7 @@ to the vendor payload, as a policy check.
   on the page itself, not just ATTRIBUTIONS.md.
 - `?demo=1` fills a fake key and builds. That is what the thumbnail shot and the video both use.
 
-**USB media player option added 2026-08-13** ([bdplay](https://github.com/stoatworks-labs/bd-play-usb-player/blob/main/docs/NOTES.md) (`bd-play-usb-player`)) — ships bdplay +
+**USB media player option added 2026-08-13** ([bdplay](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/player/docs/NOTES.md) (`player/`)) — ships bdplay +
 bdpdf/libpdfium + mount.exfat-fuse, ~13.7 MB, verified building a 6.0 MB package in-browser.
 - **`mutool` must NEVER reach this repo.** AGPL v3: serving it is distribution and §13 reaches
   network users. `sync-from-re.sh`, `build-assets.sh` and `test/build-package.mjs` each refuse
@@ -43,7 +43,7 @@ bdpdf/libpdfium + mount.exfat-fuse, ~13.7 MB, verified building a 6.0 MB package
   `npx wrangler dev` fails with "newest date supported is 2026-08-06". The page is static apart
   from the Tailscale proxy, so serve `public/` with `python3 -m http.server` to test the UI.
 
-**birdUI Tailscale panel added 2026-08-13** ([bdts](https://github.com/stoatworks-labs/bdts/blob/main/docs/NOTES.md) (`bdts`)) — the page no longer
+**birdUI Tailscale panel added 2026-08-13** ([bdts](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/tailscale-ui/docs/NOTES.md) (`tailscale-ui/`)) — the page no longer
 tells people to SSH in and run `tailscale up`; the device is signed in from its own web UI.
 Ships whenever Tailscale is selected rather than as its own checkbox. Binary only
 (`tailscale-ui/dist/`, 6.3 MB), MIT, source linked on the page.
@@ -54,8 +54,8 @@ Ships whenever Tailscale is selected rather than as its own checkbox. Binary onl
 the browser by `readModule`, checked structurally, and written to `modules/<name>/`; `update`
 runs each install as root in a subshell under `timeout 600`, logging and skipping a failure so
 the BirdDogRunner restore always runs. Contract on `public/modules.html`; starting point at
-github.com/stoatworks-labs/bd-play-module-template (its CI imports this repo's fw.js to prove
-acceptance). Same `--module` contract in birddog-re's `build.sh`.
+github.com/stoatworks-labs/bd-play-module-template, now `module-template/` (its CI imports this
+repo's fw.js to prove acceptance). Same `--module` contract in birddog-re's `build.sh`.
 - The installer change had to land upstream first: birddog-re's `tools/fwbuild/payload/update`
   had been carrying the bdts panel change UNCOMMITTED since 2026-08-13 (the patcher shipped it
   from the working tree). Committed as-is there before the modules block went on top.
@@ -69,8 +69,8 @@ acceptance). Same `--module` contract in birddog-re's `build.sh`.
   root (idempotent, config preserved, uninstall reverses it). NOT yet run on a PLAY.
 
 **Streaming gateway added 2026-09-15 (v0.3.0, beta, NOT run on a PLAY).** MediaMTX as a protocol
-hub plus bdgw from [bd-play-stream-gateway](https://github.com/stoatworks-labs/bd-play-stream-gateway)
-(binary synced into `gateway/dist/`); the picture reaches HDMI through PPApp's own SRT receiver on
+hub plus bdgw from [bd-play-stream-gateway](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/gateway)
+(then its own repo, binary synced into `gateway/dist/`; now `gateway/` here); the picture reaches HDMI through PPApp's own SRT receiver on
 loopback, via the three files the stock AV Setup page writes. Design note and the reasoning are in
 that repo's README and NOTES.
 - **MediaMTX is fetched, not committed:** 62 MB unpacked is over the 25 MiB asset cap, and GitHub's
@@ -85,5 +85,39 @@ that repo's README and NOTES.
   `bluenviron/mediamtx/releases` in packaging code, the way Tailscale is detected).
 - `converter/dist/bdcam-linux-arm64` rebuilt from bdcam 859ac90 (zig 0.16, glibc floor 2.17): the
   UVC tab gained a GATEWAY button that fills in `srt://127.0.0.1:8890?streamid=publish:cam`.
+
+**Module repos merged in 2026-10-11.** bd-play-usb-player → `player/`, bdcam → `converter/`,
+bd-play-stream-gateway → `gateway/`, bdts → `tailscale-ui/`, bd-play-module-template →
+`module-template/` (not a replacement for `test/fixtures/module`, which is a separate, smaller
+CI fixture). Each came in as a `git subtree`-style merge with its history (commit trailers
+name the split, so `git subtree split --prefix=<dir>` recovers it); the old repos stay up,
+unarchived, with a "moved" notice at the top of their READMEs.
+- The committed `dist/` binaries were not touched or rebuilt: the hosted page serves the same
+  bytes as before the merge. Each folder's `.gitignore` lost its `dist/` line, except
+  `player/dist/mutool-linux-arm64` (AGPL, never committed, never served). `build-mutool.sh`
+  still writes there, for birddog-re's `--with-play-pdf` — and `build-assets.sh` refuses to run
+  while it exists, so move it out before building the site.
+- `sync-from-re.sh` no longer copies module binaries from sibling checkouts; it syncs only the
+  installer and bdkvm. birddog-re's `fwbuild` defaults now point at a patcher checkout's
+  `<dir>/dist/`.
+- Their CI moved into `ci.yml`: a vet/test/compile-check job per Go folder, the gateway's
+  MediaMTX `--validate-conf` (pin read from `src/worker.js`, cross-checked against
+  `gateway/render.go`), and the template against this checkout's `fw.js`. bdcam's compile check
+  is `CGO_ENABLED=0` (purego's fake cgo), not the zig build that ships. No `go.work`, on purpose.
+- `deploy.yml` now uses `paths` with negations, so source-only pushes under the Go folders or
+  the template do not redeploy; a change to any `dist/` still does.
+- **Follow-up, not done:** the modules copy code between them — the birdUI session check
+  (`auth.go` in tailscale-ui/ and gateway/), the marker-wrapped atomic web-UI patch (`patch.go`
+  in player/, converter/, gateway/, tailscale-ui/), the CORS/serve scaffolding (`serve.go`, and
+  `api.go` in player/) and near-identical `build.sh` files. Now they share a repo that could be one internal package,
+  but each patch.go is unit-tested against its own page and markers — extract with care.
+- **Follow-up, not done:** `module-template/check.sh` and `module.conf` still list the reserved
+  names without `gateway gw mtx`, which `RESERVED_MODULE_NAMES` in fw.js and birddog-re's
+  `build.sh` both refuse.
+- Their own `.github/` went (funding, issue templates, workflows), except
+  `module-template/.github/workflows/ci.yml`: it is part of the template, for the author's own
+  repo once they copy the folder out, and GitHub never runs a workflow below the root here.
+- The bd-play-module-template repo is still a GitHub *template* repository, so "Use this
+  template" there copies the old tree with its "moved" notice.
 
 Related: [compressionstream gzip engine variance](https://github.com/stoatworks-labs/fleet-notes/blob/main/notes/reference_compressionstream_gzip_engine_variance.md), **release workflow** (working-practice note, kept in Claude memory).

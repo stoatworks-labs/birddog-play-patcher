@@ -1,5 +1,9 @@
 # Wiring bdts into `birddog-re/tools/fwbuild`
 
+> **Since 2026-10-11** this is `tailscale-ui/` in the patcher, and fwbuild's default for
+> `BDTS` is `$PATCHER/tailscale-ui/dist/bdts-linux-arm64`, where `PATCHER` is a
+> birddog-play-patcher checkout. The `../bdts` paths below are the original wiring.
+
 The panel installs **as part of the Tailscale payload**, not behind a flag of
 its own. A Tailscale install that still needs SSH to finish is the problem this
 solves, so making the fix optional would leave the default broken. There is an

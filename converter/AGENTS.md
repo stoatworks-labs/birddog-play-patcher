@@ -1,7 +1,9 @@
 # AGENTS.md — bdcam
 
 UVC camera → NDI sender for the **BirdDog PLAY** (Rockchip RK3328, quad A53,
-Debian 10 aarch64). Go, cross-compiled for the device. **Private repo.**
+Debian 10 aarch64). Go, cross-compiled for the device. **Public** — it lives in
+`converter/` of the public birddog-play-patcher repo (until 2026-10-11 it was its own public
+repo, stoatworks-labs/bdcam).
 
 Start with [`README.md`](README.md) — it carries the design, the two
 measurements this exists to make, and the roadmap. This file is the operating
@@ -9,16 +11,17 @@ rules.
 
 ## Where this sits
 
-`bdcam` is the canonical, standalone home of this program. The reverse
-engineering that justifies every claim in the README lives in
-`~/Projects/birddog-re` — a **private** repo, and it must stay private: its
-history contains a recovered vendor AES key and a decrypted firmware blob.
-Never make it public, and never copy key material or vendor firmware into this
-repo, which is public.
+`converter/` is the canonical home of this program; `./build.sh` writes
+`dist/bdcam-linux-arm64`, which the patcher commits and serves as-is (rebuild,
+test on a unit, commit). The reverse engineering that justifies every claim in
+the README lives in `birddog-re` — a **private** repo, and it must stay
+private: its history contains a recovered vendor AES key and a decrypted
+firmware blob. Never make it public, and never copy key material or vendor
+firmware into this repo, which is public.
 
 `birddog-re`'s `tools/fwbuild` builds the installable `.fw` and finds this
-repo's binary at `../bdcam/dist/bdcam-linux-arm64` (override with `BDCAM=`).
-So the two repos are expected to be **sibling checkouts** under `~/Projects`.
+binary in a patcher checkout, at `converter/dist/bdcam-linux-arm64` (override
+with `BDCAM=`, or point `PATCHER=` at the checkout).
 
 ## Hard rules
 

@@ -305,7 +305,7 @@ export function isElf(d) {
 // Third-party modules: a directory the installer runs `install` from, carried
 // in the package at ./modules/<name>/. The contract is documented on
 // modules.html and implemented on the device by installer/update; the template
-// at github.com/stoatworks-labs/bd-play-module-template builds archives that
+// in module-template/ (this repo) builds archives that
 // satisfy it. Everything below is structural — what `install` does as root is
 // the author's business and cannot be checked from a browser.
 

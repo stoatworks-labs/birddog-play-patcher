@@ -14,9 +14,9 @@
 const UPSTREAM = 'https://pkgs.tailscale.com/stable/';
 const VERSION_RE = /^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,6}$/;
 
-// MediaMTX is pinned, not "latest": bd-play-stream-gateway renders a
-// configuration in MediaMTX's own key names and validates it in CI against
-// exactly this release, and birddog-re's fwbuild stages the same one. Bump
+// MediaMTX is pinned, not "latest": gateway/ (bdgw) renders a
+// configuration in MediaMTX's own key names, and CI validates it against
+// exactly this release (reading the pin from here), and birddog-re's fwbuild stages the same one. Bump
 // all three together.
 const MEDIAMTX_VERSION = 'v1.21.0';
 const MEDIAMTX_BASE = 'https://github.com/bluenviron/mediamtx/releases/download/';

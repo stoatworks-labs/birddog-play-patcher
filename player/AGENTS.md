@@ -3,7 +3,8 @@
 USB media player for the **BirdDog PLAY** (Rockchip RK3328, quad A53, Debian 10
 aarch64). Adds a **USB** entry to birdUI's source dropdown and plays video,
 stills and PDFs off a USB stick, straight to HDMI. Go, cross-compiled for the
-device. **Public repo (MIT)** — it is shipped from the public
+device. **Public (MIT)** — it lives in `player/` of the public
+birddog-play-patcher repo and is shipped from the
 [PLAY Patcher](https://birddog-play-patcher.stoatworks-labs.com), so read the
 licence note below before adding any dependency.
 
@@ -12,20 +13,18 @@ measurements behind it. This file is the operating rules.
 
 ## Where this sits
 
-`bdplay` is the canonical, standalone home of this program. The reverse
-engineering that justifies every claim in the README lives in
-`~/Projects/birddog-re` — **local-only, no remote, and it must stay that way**:
-its history contains a recovered vendor AES key and a decrypted firmware blob.
-Do not push `birddog-re` anywhere, and do not copy key material or vendor
-firmware into this repo.
+`player/` is the canonical home of this program (until 2026-10-11 it was its
+own repo, stoatworks-labs/bd-play-usb-player). `./build.sh` and the helper
+scripts write `dist/`, which the patcher commits and serves as-is — rebuild,
+test on a unit, commit. The reverse engineering that justifies every claim in
+the README lives in `birddog-re` — a **private** research repo, and it must
+stay private: its history contains a recovered vendor AES key and a decrypted
+firmware blob. Do not copy key material or vendor firmware into this repo.
 
-Sibling checkouts under `~/Projects` are assumed: `birddog-re` (research),
-`bdkvm` (NDI KVM), `bdcam` (UVC → NDI). `birddog-re`'s `tools/fwbuild` builds
-the installable `.fw` and finds this repo's binary at
-`../bd-play-usb-player/dist/bdplay-linux-arm64` (override with `BDPLAY=`).
-The repo is `bd-play-usb-player`; the binary, service and command are all
-`bdplay`. Keep the checkout directory named after the repo — a mismatch between
-the two is a recurring source of broken sibling paths in this fleet.
+`birddog-re`'s `tools/fwbuild` builds the installable `.fw` and finds this
+binary in a patcher checkout, at `player/dist/bdplay-linux-arm64` (override
+with `BDPLAY=`, or point `PATCHER=` at the checkout); the exFAT helper and
+mutool beside it. The binary, service and command are all `bdplay`.
 
 ## Hard rules
 
@@ -74,8 +73,12 @@ the two is a recurring source of broken sibling paths in this fleet.
 
 bdplay `exec()`s all of these as separate processes and shares no address
 space, so bdplay itself is not a derived work of any of them. **Distributing
-the binaries is what carries the obligation.** None is in this repo or produced
-by `build.sh`.
+the binaries is what carries the obligation.** None is produced by `build.sh`.
+Since this folder moved into the patcher, `bdpdf`, `libpdfium.so` and
+`mount.exfat-fuse` are committed in `dist/`, because the patcher serves them and
+carries their source offer on its page. `mutool` never is: `.gitignore` keeps
+it out, and the patcher's `scripts/build-assets.sh` refuses to run while
+`dist/mutool-linux-arm64` exists.
 
 - **`bdpdf` + `libpdfium.so` — ours MIT, PDFium BSD-3-Clause.** The default PDF
   path, and the only one that can ship from the public web patcher. Permissive,

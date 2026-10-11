@@ -9,6 +9,8 @@ Cross-cutting notes that are not specific to this repo live in
 
 *bdcam — UVC camera to NDI/SRT/HDMI for the BirdDog PLAY; PUBLIC sibling repo (was private until 2026-08), adds the UVC Converter tab to birdUI, working on hardware*
 
+**Moved 2026-10-11:** this is now `converter/` in [birddog-play-patcher](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/converter), history included; the old stoatworks-labs/bdcam repo carries a pointer. Paths and "this repo" below are as they were written. birddog-re's fwbuild now takes the binary from a patcher checkout at `converter/dist/bdcam-linux-arm64`, and the patcher commits and serves that file directly — there is no sync step any more.
+
 `~/Projects/bdcam` — **PUBLIC** (github.com/stoatworks-labs/bdcam), turns a USB
 UVC camera plugged into a PLAY into an NDI/SRT sender, or straight to HDMI.
 Sibling checkout beside [birddog re](https://github.com/stoatworks-labs/birddog-re/blob/main/docs/NOTES.md) (`birddog-re`), which packages it via
@@ -30,7 +32,7 @@ SDK" rule below is what keeps it publishable. Unlike
 - Go + **purego + `zig cc`**, pinned `aarch64-linux-gnu.2.28`: purego needs cgo
   for `dlopen` on Linux and macOS has no aarch64-linux gcc. Without the pin zig
   targets a newer glibc and the binary will not start on the device's Debian 10.
-  ([bdplay](https://github.com/stoatworks-labs/bd-play-usb-player/blob/main/docs/NOTES.md) (`bd-play-usb-player`) and [bdts](https://github.com/stoatworks-labs/bdts/blob/main/docs/NOTES.md) (`bdts`) need none of this — they dlopen
+  ([bdplay](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/player/docs/NOTES.md) (`bd-play-usb-player`) and [bdts](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/tailscale-ui/docs/NOTES.md) (`bdts`) need none of this — they dlopen
   nothing, so `CGO_ENABLED=0` is enough.)
 - **`--with-cam-ui` adds a "UVC Converter" tab to birdUI** by patching
   `videoset.html`. The patch lives in bdcam where it is unit tested, refuses
@@ -45,7 +47,7 @@ SDK" rule below is what keeps it publishable. Unlike
 - Verified end to end on hardware: patched, restarted (pid 5180 → 25439), the
   tab served, and the API answering over the tailnet with CORS headers.
 
-Its `videoset.html` observation contradicts [bdplay](https://github.com/stoatworks-labs/bd-play-usb-player/blob/main/docs/NOTES.md) (`bd-play-usb-player`)'s — see the
+Its `videoset.html` observation contradicts [bdplay](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/player/docs/NOTES.md) (`bd-play-usb-player`)'s — see the
 disputed note there before assuming either.
 
-Related: [bdts](https://github.com/stoatworks-labs/bdts/blob/main/docs/NOTES.md) (`bdts`), [birddog play patcher](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/docs/NOTES.md) (`birddog-play-patcher`).
+Related: [bdts](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/tailscale-ui/docs/NOTES.md) (`bdts`), [birddog play patcher](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/docs/NOTES.md) (`birddog-play-patcher`).

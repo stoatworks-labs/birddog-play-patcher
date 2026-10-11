@@ -390,7 +390,8 @@ fi
 # reaches HDMI through PPApp's own SRT receiver on loopback — nothing takes the
 # display, and the OSD, tally and web UI stay in charge. Same rules as every
 # other payload: everything under /userdata, self-supervised, nothing on the
-# recovery path touched. Source: github.com/stoatworks-labs/bd-play-stream-gateway.
+# recovery path touched. Source: gateway/ in
+# github.com/stoatworks-labs/birddog-play-patcher.
 if [ "$WITH_GATEWAY" = 1 ] && [ -d "$SDIR/userdata/bd-gw" ]; then
   NEED_KB=$(du -sk "$SDIR/userdata/bd-gw" | awk '{print $1}')
   if [ -n "$FREE_KB" ] && [ "$FREE_KB" -lt $((NEED_KB + 51200)) ]; then
@@ -455,7 +456,7 @@ fi
 # videoset.html again — bdcam's UVC tab and bdplay's USB entry patch the same
 # file, each with its own markers, and bdgw anchors where bdcam does so the
 # tabs sit side by side whichever went first. Same discipline: the patch is
-# unit tested in bd-play-stream-gateway, refuses unfamiliar markup and is
+# unit tested in the patcher's gateway/, refuses unfamiliar markup and is
 # exactly reversible; the health check and rollback here are the second line.
 if [ "${GW_INSTALLED:-0}" = 1 ] && [ "$WITH_GATEWAY_UI" = 1 ] && [ -x /userdata/bd-gw/bdgw ]; then
   WEBUI_UNIT=BirdDogWebUI
@@ -492,7 +493,7 @@ if [ -d "$SDIR/files" ]; then
 fi
 
 # ------------------------------------------------------------------ modules
-# Third-party modules. Built from github.com/stoatworks-labs/bd-play-module-template
+# Third-party modules. Built from module-template/ in birddog-play-patcher
 # and put in the package by the patcher (or `build.sh --module`), each is a
 # directory under modules/ with a module.conf and an `install` script, which
 # runs as root with the module directory as its cwd — the position this script

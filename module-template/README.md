@@ -11,7 +11,7 @@ the USB media player, the UVC converter).
 
 This template is a complete, working module. It installs a tiny service,
 `bd-hello`, that writes a heartbeat file every minute — enough to prove the
-whole path from "Use this template" to "it is running on my PLAY", and to be
+whole path from "copy this folder" to "it is running on my PLAY", and to be
 replaced with what you actually want.
 
 > **You are packaging code that will run as root on your device.** The patcher
@@ -42,7 +42,9 @@ package's `update` script runs each `modules/*/install` in turn.
 
 ## Use it
 
-1. **Use this template** on GitHub (or clone it), and rename things: `NAME`
+1. **Copy this folder** — `module-template/` in
+   [birddog-play-patcher](https://github.com/stoatworks-labs/birddog-play-patcher),
+   hidden `.github/` included — to the root of a repo of your own, and rename things: `NAME`
    in `module.conf` is the one name everything else derives from —
    `modules/<NAME>/` in the package, `/userdata/bd-<NAME>` and
    `bd-<NAME>.service` on the device. `install`, `uninstall` and `hello.sh`
@@ -114,9 +116,9 @@ What nothing enforces, and what keeps a unit recoverable:
 - **No symlinks or hard links** in the archive; create them from `install`.
 - **Binaries must be aarch64 ELF**, built for Debian 10's glibc 2.28 or fully
   static. Go with `CGO_ENABLED=0 GOOS=linux GOARCH=arm64` is the easy path;
-  the patcher's own [bdplay](https://github.com/stoatworks-labs/bd-play-usb-player)
-  is built that way, and [bdcam](https://github.com/stoatworks-labs/bdcam) and
-  [bdts](https://github.com/stoatworks-labs/bdts) show cgo with zig.
+  the patcher's own [bdplay](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/player)
+  is built that way, and [bdcam](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/converter) and
+  [bdts](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/tailscale-ui) show cgo with zig.
 - **Keep it small.** The whole package is extracted into a temp dir on the
   device before anything runs. Tens of megabytes are proven (Tailscale is
   68 MB unpacked); the patcher refuses a module over 256 MB.
@@ -131,19 +133,22 @@ What nothing enforces, and what keeps a unit recoverable:
 node scripts/patcher-accepts.mjs dist/*.tgz # the patcher's own reader must accept it
 ```
 
-The last one imports `fw.js` from a shallow clone of the patcher, so a module
-that passes it here will be accepted in the browser, and refused here with the
-same message it would get there. CI runs all three on every push.
+The last one imports `fw.js` from a shallow clone of the patcher (or, while
+this folder is still inside a patcher checkout, from that checkout), so a
+module that passes it here will be accepted in the browser, and refused here
+with the same message it would get there. CI runs all three on every push —
+`.github/workflows/ci.yml` once this folder is the root of your repo, and the
+patcher's own CI for the copy that lives there.
 
 ## Worked examples
 
 The patcher's own payloads are modules in all but packaging, and each is a
-public repo you can read: [bdts](https://github.com/stoatworks-labs/bdts)
+folder of the patcher's public repo you can read: [bdts](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/tailscale-ui)
 (patches a web-UI page, with a health check and rollback — the pattern to copy
-if you must touch the UI), [bdcam](https://github.com/stoatworks-labs/bdcam)
+if you must touch the UI), [bdcam](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/converter)
 (a self-supervising unit that exits 0 when its device is absent, which turns
 `Restart=always` into a hotplug poller), and
-[bd-play-usb-player](https://github.com/stoatworks-labs/bd-play-usb-player).
+[bd-play-usb-player](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/player).
 The installer that runs them all is
 [`installer/update`](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/installer/update)
 in the patcher; its `modules` section is the code that runs yours.

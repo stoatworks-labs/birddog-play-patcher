@@ -2,7 +2,7 @@
 
 Tailscale authentication and settings inside birdUI, on the **BirdDog PLAY**
 (Rockchip RK3328, quad A53, Debian 10 aarch64). Go, cross-compiled for the
-device, no cgo.
+device, no cgo. **Public** — `tailscale-ui/` of the birddog-play-patcher repo.
 
 Start with [`README.md`](README.md) — it carries the design, the security
 argument and the hardware verification that is still outstanding. This file is
@@ -10,16 +10,18 @@ the operating rules.
 
 ## Where this sits
 
-`bdts` is the canonical, standalone home of this program, alongside `bdcam` and
-`bd-play-usb-player` as sibling checkouts under `~/Projects`. The reverse
-engineering that justifies every claim in the README lives in
-`~/Projects/birddog-re` — **local-only, no remote, and it must stay that way**:
-its history contains a recovered vendor AES key and a decrypted firmware blob.
-Do not push `birddog-re` anywhere, and do not copy key material or vendor
-firmware into this repo.
+`tailscale-ui/` is the canonical home of this program (until 2026-10-11 it was
+its own repo, stoatworks-labs/bdts), beside `converter/` (bdcam) and `player/`
+(bdplay) in the patcher. `./build.sh` writes `dist/bdts-linux-arm64`, which the
+patcher commits and serves as-is — rebuild, test on a unit, commit. The reverse
+engineering that justifies every claim in the README lives in `birddog-re` — a
+**private** research repo, and it must stay private: its history contains a
+recovered vendor AES key and a decrypted firmware blob. Do not copy key
+material or vendor firmware into this repo.
 
-`birddog-re`'s `tools/fwbuild` finds this repo's binary at
-`../bdts/dist/bdts-linux-arm64` (override with `BDTS=`).
+`birddog-re`'s `tools/fwbuild` finds this binary in a patcher checkout, at
+`tailscale-ui/dist/bdts-linux-arm64` (override with `BDTS=`, or point
+`PATCHER=` at the checkout).
 
 ## Hard rules
 

@@ -166,7 +166,7 @@ bdcam --output hdmi                                   # kmssink, straight to the
 bdcam --output srt,hdmi --srt-url srt://host:9000     # one capture, tee'd to both
 ```
 
-With the [streaming gateway](https://github.com/stoatworks-labs/bd-play-stream-gateway)
+With the [streaming gateway](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/gateway)
 installed on the same PLAY, point the SRT output at its listener on loopback and the
 camera comes out as RTSP, RTMP, HLS, WebRTC and SRT — and can be pushed on to
 RTMP(S), RTSP, SRT or WHIP destinations — with no second encode:
