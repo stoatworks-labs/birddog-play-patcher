@@ -1,0 +1,38 @@
+name: ci
+
+# Three independent readers must agree the module is sound: check.sh (static),
+# GNU tar (the same program the device runs), and the PLAY patcher's own fw.js
+# (what the browser will do to the archive). A module that passes here will be
+# accepted at birddog-play-patcher.stoatworks-labs.com.
+on:
+  push:
+  pull_request:
+
+jobs:
+  module:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Static checks
+        run: ./check.sh
+
+      - name: Build the archive
+        run: ./build.sh
+
+      - name: GNU tar must accept it
+        run: tar tzvf dist/*.tgz
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: The PLAY patcher must accept it
+        run: |
+          git clone --quiet --depth 1 https://github.com/stoatworks-labs/birddog-play-patcher /tmp/patcher
+          node scripts/patcher-accepts.mjs dist/*.tgz /tmp/patcher
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: module
+          path: dist/*.tgz

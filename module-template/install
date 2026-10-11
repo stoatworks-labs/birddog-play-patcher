@@ -1,0 +1,91 @@
+#!/bin/bash
+# Runs as root on the PLAY, started by the package's installer (`update`) as
+# `bash ./install` with THIS directory as the working directory. It runs once
+# per firmware upload, after the patcher's own payloads, and again on every
+# reinstall — so everything here must be safe to repeat.
+#
+# What the installer gives you:
+#   BD_MODULE          the NAME from module.conf          (here: hello)
+#   BD_MODULE_VERSION  the VERSION from module.conf
+#   BD_MODULE_DIR      absolute path of this directory
+#   BD_BUILD_TAG       the package's build tag
+#   BD_HARDWARE        "BirdDog PLAY" or "BirdDog Pod" — anything else never gets here
+#   BD_INSTALL_LOG     /tmp/bd-custom-install.log, where this script's output goes
+#   bd_log             a function; what you pass it appears in the web UI's live
+#                      update log as [module:<name>] …, and in BD_INSTALL_LOG
+#
+# What it guarantees around you: the hardware ID has been checked, the rootfs
+# is writable, /userdata exists, this runs in its own subshell (your `exit`,
+# `cd` and `set -e` are yours alone), it is killed after 10 minutes where the
+# device has `timeout` (Debian's coreutils does), and a non-zero exit is logged
+# as a warning while the rest of the install — and the restart of BirdDogRunner
+# that brings the display back — carries on. That contains a script that FAILS;
+# nothing contains one that reboots or kills the updater on purpose.
+#
+# The rules nothing enforces, which are what keep a unit recoverable:
+#   * keep everything under /userdata/bd-<name>; the rootfs gets a systemd unit
+#   * never touch sshd, sshd_config, birddog-update-wrapper, BirdDogUpdateRunner
+#     or birddog-web-ui — they are how you get back in when something is wrong
+#   * do not reboot, and do not stop BirdDogRunner unless you start it again
+#   * pick a port nobody has: 80 and 8080 are BirdDog's, 8090 bd-cam-api,
+#     8091 bd-play, 8092 bd-tailscale-ui, 9031 sshd. A collision is silent.
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+# Standalone runs (testing over SSH) get the same names the installer provides.
+NAME="${BD_MODULE:-$(sed -n 's/^NAME=//p' module.conf | head -1 | tr -d "\"'")}"
+VERSION="${BD_MODULE_VERSION:-$(sed -n 's/^VERSION=//p' module.conf | head -1 | tr -d "\"'")}"
+type bd_log >/dev/null 2>&1 || bd_log() { echo "[module:${NAME}] $*"; }
+
+DEST="/userdata/bd-${NAME}"
+UNIT="bd-${NAME}.service"
+
+bd_log "installing ${NAME} ${VERSION} to ${DEST}"
+
+# ------------------------------------------------------------------ payload
+# Everything the service needs lives in payload/ and is copied as a whole.
+# A compiled program goes in payload/bin/ — build.sh checks it is aarch64.
+mkdir -p "$DEST"
+cp -Rf payload/. "$DEST/"
+cp -f module.conf uninstall "$DEST/"
+# The tar's modes are not trusted on the device (the patcher normalises them,
+# a hand-built archive may not have) — set what must be executable here.
+find "$DEST" -maxdepth 1 -name '*.sh' -exec chmod 755 {} +
+chmod 755 "$DEST/uninstall"
+if [ -d "$DEST/bin" ]; then chmod 755 "$DEST"/bin/*; fi
+chown -R root:root "$DEST"
+
+# A config the user may have edited on the device is kept across reinstalls —
+# it is how a unit gets tuned once it is out of reach. Ship the default under a
+# different name so the copy above cannot overwrite it.
+[ -f "$DEST/hello.conf" ] || cp -f "$DEST/hello.conf.default" "$DEST/hello.conf"
+
+# --------------------------------------------------------------------- unit
+# Restart=always makes the unit its own supervisor; a program that exits 0
+# when it has nothing to do (no device attached, say) turns this into a
+# hotplug poller with no udev rule needed. That is how bd-kvm and bd-cam work.
+cat > "/etc/systemd/system/${UNIT}" <<EOF
+[Unit]
+Description=bd-${NAME} ${VERSION} (custom module)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=${DEST}
+ExecStart=${DEST}/run.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable "$UNIT" >/dev/null 2>&1 || true
+if systemctl restart "$UNIT"; then
+  bd_log "${UNIT} started — check ${DEST}/heartbeat over SSH"
+else
+  # Report and still exit 0: a service that failed to start is a problem for
+  # journalctl, not a reason to mark the whole firmware install as failed.
+  bd_log "WARNING: ${UNIT} failed to start — journalctl -u ${UNIT}"
+fi

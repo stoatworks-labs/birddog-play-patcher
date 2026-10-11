@@ -1,0 +1,4 @@
+# Default settings for bd-hello. install copies this to hello.conf ONLY if that
+# file does not exist yet, so edits made on the device survive a reinstall.
+# Sourced by hello.sh: shell syntax.
+INTERVAL=60

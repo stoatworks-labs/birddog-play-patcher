@@ -1,0 +1,16 @@
+#!/bin/bash
+# Reverses install. It is copied onto the device beside the payload, so later:
+#
+#   ssh -p 9031 root@<play-ip> bash /userdata/bd-hello/uninstall
+#
+# Keep this in step with install: everything install creates, this removes.
+set -u
+cd "$(dirname "${BASH_SOURCE[0]}")"
+NAME="${BD_MODULE:-$(sed -n 's/^NAME=//p' module.conf | head -1 | tr -d "\"'")}"
+UNIT="bd-${NAME}.service"
+
+systemctl disable --now "$UNIT" 2>/dev/null
+rm -f "/etc/systemd/system/${UNIT}"
+systemctl daemon-reload 2>/dev/null
+rm -rf "/userdata/bd-${NAME}"
+echo "bd-${NAME} removed"
