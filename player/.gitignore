@@ -1,3 +1,9 @@
-dist/
+# dist/ is COMMITTED here: the patcher ships these binaries from player/dist/.
+# mutool is the exception, and must stay one. It is AGPL v3 — serving it from
+# the public patcher would be distribution, and §13 reaches network users — and
+# at 37 MB it is over Cloudflare's 25 MiB asset cap. tools/build-mutool.sh
+# still writes it here for birddog-re's --with-play-pdf, and
+# scripts/build-assets.sh refuses to run while it is present.
+dist/mutool-linux-arm64
 build/
 /bdplay

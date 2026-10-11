@@ -1,3 +1,3 @@
-dist/
+# dist/ is COMMITTED here: the patcher ships bdcam from converter/dist/.
 .DS_Store
 /bdcam
