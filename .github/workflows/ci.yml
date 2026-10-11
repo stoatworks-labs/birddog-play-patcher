@@ -2,11 +2,16 @@ name: ci
 
 # The page has no build step, so CI's job is to prove the archive writer still
 # produces a package a real tar can read, and that what it ships matches what is
-# committed in installer/.
+# committed in installer/. The module folders (player/, converter/, gateway/,
+# tailscale-ui/, module-template/) were their own repos until 2026-10-11; their
+# checks moved here with them, in the jobs after the first.
 on:
   push:
     branches: [main]
   pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   birddog-play-patcher:
@@ -77,3 +82,140 @@ jobs:
           for f in installer/update installer/probe.sh installer/kvm-run.sh installer/gw-run.sh installer/gw-api-run.sh scripts/*.sh test/fixtures/module/install; do
             bash -n "$f" && echo "ok  $f"
           done
+
+  # One job per Go module folder. Each is its own Go module with its own go.mod
+  # — deliberately no go.work: a workspace would resolve one shared set of
+  # dependency versions across all of them, so a module's build.sh would
+  # silently build against versions its own go.sum never named.
+  #
+  # The cross-compile is a compile check, not the shipped build: the binary the
+  # site serves is the one committed in <dir>/dist/, built by <dir>/build.sh.
+  # bdcam is cgo (purego, built with zig against glibc 2.28); with
+  # CGO_ENABLED=0 purego falls back to its fake cgo, which still proves the
+  # Linux-only code compiles for the device.
+  go:
+    name: ${{ matrix.dir }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { dir: player, bin: bdplay }
+          - { dir: converter, bin: bdcam }
+          - { dir: gateway, bin: bdgw, tab: web/streaming.js, placeholder: __BDGW_API_PORT__, port: "8093" }
+          - { dir: tailscale-ui, bin: bdts, tab: web/bdts-tailscale.js, placeholder: __BDTS_API_PORT__, port: "8092" }
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: ${{ matrix.dir }}/go.mod
+          # go.mod, not go.sum: gateway/ and tailscale-ui/ have no dependencies
+          # and so no go.sum.
+          cache-dependency-path: ${{ matrix.dir }}/go.mod
+
+      - name: vet
+        run: go vet ./...
+
+      - name: test
+        run: go test ./...
+
+      # The tab is a plain script embedded in the binary with no build step, so
+      # nothing else would catch a syntax error until a browser on a device
+      # rendered an empty tab. Check the RENDERED script, as build.sh does: the
+      # port substitution is what makes the placeholder parse.
+      - name: the tab script parses
+        if: matrix.tab
+        run: |
+          sed 's/${{ matrix.placeholder }}/${{ matrix.port }}/g' ${{ matrix.tab }} > "$RUNNER_TEMP/tab.js"
+          node --check "$RUNNER_TEMP/tab.js"
+
+      - name: cross-compile for the PLAY
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w" \
+            -o "$RUNNER_TEMP/${{ matrix.bin }}-linux-arm64" .
+          file "$RUNNER_TEMP/${{ matrix.bin }}-linux-arm64" | grep -q 'ARM aarch64'
+
+  # gateway/'s renderer emits MediaMTX's own key names, which change between
+  # releases. The only proof a rendered file is one MediaMTX will load is asking
+  # the real binary, so fetch the release the Worker pins (the one the page puts
+  # in packages), check its published SHA-256, and run --validate-conf over
+  # every fixture the gateway's tests write. birddog-re's fwbuild pins the same
+  # version; it is private, so that third copy is checked by hand.
+  mediamtx:
+    name: gateway config vs pinned MediaMTX
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: gateway/go.mod
+          cache-dependency-path: gateway/go.mod
+
+      - name: the pin in src/worker.js matches gateway/render.go
+        run: |
+          set -euo pipefail
+          v="$(sed -n "s/^const MEDIAMTX_VERSION = '\(v[0-9.]*\)';.*/\1/p" src/worker.js)"
+          [ -n "$v" ] || { echo "no MEDIAMTX_VERSION in src/worker.js" >&2; exit 1; }
+          grep -q "MediaMTXVersion = \"$v\"" gateway/render.go || {
+            echo "gateway/render.go pins a different MediaMTX than src/worker.js ($v)" >&2; exit 1; }
+          echo "MEDIAMTX_VERSION=$v" >> "$GITHUB_ENV"
+          echo "pinned: $v"
+
+      - name: render the fixtures
+        working-directory: gateway
+        run: go test ./...
+
+      - name: fetch MediaMTX ${{ env.MEDIAMTX_VERSION }}
+        run: |
+          set -euo pipefail
+          base="https://github.com/bluenviron/mediamtx/releases/download/${MEDIAMTX_VERSION}"
+          tgz="mediamtx_${MEDIAMTX_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/${tgz}" "${base}/${tgz}"
+          curl -fsSL -o "$RUNNER_TEMP/checksums.sha256" "${base}/checksums.sha256"
+          (cd "$RUNNER_TEMP" && grep " \*\?${tgz}\$" checksums.sha256 | sed 's/\*//' | sha256sum -c -)
+          mkdir -p "$RUNNER_TEMP/mtx" && tar xzf "$RUNNER_TEMP/${tgz}" -C "$RUNNER_TEMP/mtx"
+          "$RUNNER_TEMP/mtx/mediamtx" --version
+
+      - name: every rendered fixture validates
+        working-directory: gateway
+        run: |
+          set -euo pipefail
+          ls testdata/rendered/*.yml
+          for f in testdata/rendered/*.yml; do
+            echo "== $f"
+            "$RUNNER_TEMP/mtx/mediamtx" --validate-conf="$f"
+          done
+
+  # Three independent readers must agree the template module is sound: its
+  # check.sh (static), GNU tar (what the device runs) and this repo's own
+  # public/fw.js readModule — the working tree's, not a clone of main, so a
+  # change to the reader that would refuse the template fails here first.
+  module-template:
+    name: module-template
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: module-template
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: static checks
+        run: ./check.sh
+
+      - name: build the archive
+        run: ./build.sh
+
+      - name: GNU tar must accept it
+        run: tar tzvf dist/*.tgz
+
+      - name: this repo's fw.js must accept it
+        run: node scripts/patcher-accepts.mjs dist/*.tgz ..

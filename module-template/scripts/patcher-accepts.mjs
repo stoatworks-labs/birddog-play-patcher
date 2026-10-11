@@ -3,8 +3,10 @@
 //
 //   node scripts/patcher-accepts.mjs dist/hello-0.1.0.tgz [path/to/birddog-play-patcher]
 //
-// Without a path the patcher is cloned shallowly into a temp dir (needs git and
-// network). Exits non-zero, with the patcher's own message, if the module would
+// Without a path it uses the birddog-play-patcher checkout this template sits
+// in (module-template/ there), so the reader tested is the working tree's; a
+// copy of the template on its own clones the patcher shallowly into a temp dir
+// instead (needs git and network). Exits non-zero, with the patcher's own message, if the module would
 // be refused in the browser — the same check.sh runs statically, but this one
 // is the real thing.
 
@@ -13,7 +15,7 @@ import { existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, basename, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 
 const [tgz, given] = process.argv.slice(2);
 if (!tgz) {
@@ -23,6 +25,8 @@ if (!tgz) {
 
 let patcher = given && resolve(given);
 let cleanup = null;
+const enclosing = fileURLToPath(new URL('../../', import.meta.url));
+if (!patcher && existsSync(join(enclosing, 'public/fw.js'))) patcher = enclosing;
 if (!patcher) {
   patcher = await mkdtemp(join(tmpdir(), 'patcher-'));
   cleanup = patcher;

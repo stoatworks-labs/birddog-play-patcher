@@ -8,7 +8,11 @@
 # update for that dependency, which is exactly the PR worth having.
 #
 # Three ecosystems here: Actions, npm (wrangler only — the page itself has no
-# dependencies), and the Go module under agent/ that builds the on-device agent.
+# dependencies), and the Go modules that build the on-device programs: agent/
+# (bdkvm), player/, converter/, gateway/ and tailscale-ui/. gateway/ and
+# tailscale-ui/ have no dependencies today; they are listed so the first one
+# they gain is watched. A bump here changes go.mod only — the binary in that
+# folder's dist/ is what ships, and it is rebuilt by hand.
 version: 2
 updates:
   - package-ecosystem: "github-actions"
@@ -47,7 +51,12 @@ updates:
         patterns: ["*"]
         update-types: ["minor", "patch"]
   - package-ecosystem: "gomod"
-    directory: "/agent"
+    directories:
+      - "/agent"
+      - "/player"
+      - "/converter"
+      - "/gateway"
+      - "/tailscale-ui"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 3
