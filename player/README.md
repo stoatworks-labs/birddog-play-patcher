@@ -238,10 +238,10 @@ output and a working web UI, which reads as bricked — hence the belt and brace
 ## Licence
 
 bdplay itself is this repo's licence. The two optional helpers it shells out to
-are not, and neither is vendored here or built by `build.sh` — build them
-deliberately, and resolve the obligations before any public release. Without
-either, bdplay runs fine and reports the missing capability rather than failing
-oddly.
+are not, and neither is built by `build.sh` — each has its own script, below.
+The PDFium and exFAT builds the web patcher ships are committed in `dist/`, with
+the obligations met as the table says; `mutool` never is. Without either helper,
+bdplay runs fine and reports the missing capability rather than failing oddly.
 
 | Helper | Built by | Licence | Ships from the web patcher? |
 |---|---|---|---|

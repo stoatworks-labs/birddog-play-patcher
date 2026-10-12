@@ -185,11 +185,6 @@ Still outstanding:
 
 Note `GET /settings` unauthenticated redirects to `/dashboard`, not `/login`.
 The gate treats any 3xx as unauthenticated, which is why that works.
-5. Check `tailscale debug prefs` really is present in 1.102.2 — the settings
-   toggles read their current state from it, and fall back to blank if not.
-6. Roll back with `--unpatch-ui` and confirm the page is byte-identical to
-   `/userdata/settings.html.orig` if BirdDog ships one, or to the `.bdts-stock`
-   backup otherwise.
 
 ## Where this sits
 
@@ -218,7 +213,9 @@ firmware packager fetches it, and its BSD-3 notice obligation is carried there.
 | 8090 | `bd-cam-api` — bdcam's UVC Converter tab |
 | 8091 | `bd-play` — bdplay's USB media player |
 | **8092** | **`bd-tailscale-ui` — this** |
+| 8093 | `bd-gw` — the streaming gateway's Streaming tab |
+| 1935, 8554, 8888, 8889, 8890/udp | the streaming gateway's MediaMTX (full list in [`gateway/README.md`](../gateway/README.md#ports)) |
 
-Picked to avoid the three that are already taken; 8091 in particular is bdplay's
+8092 was picked to avoid the three that were already taken; 8091 in particular is bdplay's
 and would have collided silently, with whichever service started second failing
 to bind and its panel simply never answering.

@@ -2,14 +2,16 @@
 #
 # Static assets plus one small Worker. The page assembles the firmware package in
 # the browser, so there is no server-side work and no secret to bind: the Worker
-# exists only because pkgs.tailscale.com serves no Access-Control-Allow-Origin
-# header, which stops the browser fetching the Tailscale tarball itself.
+# exists only because pkgs.tailscale.com and GitHub's release downloads (the
+# gateway's pinned MediaMTX) serve no Access-Control-Allow-Origin header, which
+# stops the browser fetching those tarballs itself.
 #
 # public/assets/ is generated and gitignored — run scripts/build-assets.sh before
 # deploying, or the page will load and then refuse to build.
 #
-# Deliberately NOT connected to a Cloudflare build. Deploys are local
-# (`cf-run npx wrangler deploy`), so pushing a branch cannot publish to
+# Deliberately NOT connected to a Cloudflare build. Deploys run from
+# .github/workflows/deploy.yml on a push to main (or by hand with
+# `cf-run npx wrangler deploy`), so pushing any other branch cannot publish to
 # production — a trap that has bitten other repos in this fleet.
 
 name = "birddog-play-patcher"

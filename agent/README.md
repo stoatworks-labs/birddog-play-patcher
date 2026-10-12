@@ -25,7 +25,7 @@ unit-tested against the byte-verified reference.
 ## Build
 
 ```bash
-tools/bdkvm/build.sh          # -> dist/bdkvm-linux-arm64
+./build.sh                    # -> dist/bdkvm-linux-arm64
 go test ./...                 # wire-format tests, run natively
 ```
 

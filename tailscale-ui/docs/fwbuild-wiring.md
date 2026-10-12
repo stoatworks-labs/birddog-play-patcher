@@ -1,8 +1,12 @@
 # Wiring bdts into `birddog-re/tools/fwbuild`
 
-> **Since 2026-10-11** this is `tailscale-ui/` in the patcher, and fwbuild's default for
+> **Landed.** fwbuild and the installer (`installer/update` here) carry these blocks, and
+> the public patcher has shipped the panel with Tailscale since 2026-08-13. **Since
+> 2026-10-11** this is `tailscale-ui/` in the patcher, and fwbuild's default for
 > `BDTS` is `$PATCHER/tailscale-ui/dist/bdts-linux-arm64`, where `PATCHER` is a
-> birddog-play-patcher checkout. The `../bdts` paths below are the original wiring.
+> birddog-play-patcher checkout. The `../bdts` paths below, the comments calling bdts
+> its own repo and the hint to clone `stoatworks-labs/bdts` (now archived) are the
+> original wiring; fwbuild now says to clone the patcher and set `PATCHER=`.
 
 The panel installs **as part of the Tailscale payload**, not behind a flag of
 its own. A Tailscale install that still needs SSH to finish is the problem this

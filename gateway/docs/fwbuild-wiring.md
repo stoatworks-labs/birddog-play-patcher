@@ -2,7 +2,9 @@
 
 > **Since 2026-10-11** this is `gateway/` in the patcher, and fwbuild's default for `BDGW`
 > is `$PATCHER/gateway/dist/bdgw-linux-arm64`, where `PATCHER` is a birddog-play-patcher
-> checkout. The `../bd-play-stream-gateway` paths below are the original wiring.
+> checkout. The `../bd-play-stream-gateway` paths below, the comments calling it its own
+> public repo and the hint to clone `stoatworks-labs/bd-play-stream-gateway` (now archived)
+> are the original wiring; fwbuild now says to clone the patcher and set `PATCHER=`.
 
 Two payload files, two units, one UI patch. Presented as blocks to insert rather than a
 diff, for the reason bdts gives: `build.sh` and `payload/update` move often, and a context

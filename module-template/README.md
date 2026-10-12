@@ -7,7 +7,7 @@ A starting point for your own **BirdDog PLAY module** — something the
 [PLAY Patcher](https://birddog-play-patcher.stoatworks-labs.com) packs into the
 firmware package it builds, and the package's installer runs as root on the
 device, alongside the patcher's own payloads (Tailscale, the NDI KVM endpoint,
-the USB media player, the UVC converter).
+the USB media player, the UVC converter, the streaming gateway).
 
 This template is a complete, working module. It installs a tiny service,
 `bd-hello`, that writes a heartbeat file every minute — enough to prove the
@@ -105,7 +105,10 @@ What nothing enforces, and what keeps a unit recoverable:
   and still exit 0 — that is a problem for `journalctl`, not a failed firmware
   install.
 - **Pick a port nobody has.** 80 and 8080 are BirdDog's, 8090 `bd-cam-api`,
-  8091 `bd-play`, 8092 `bd-tailscale-ui`, 9031 sshd. A collision is silent:
+  8091 `bd-play`, 8092 `bd-tailscale-ui`, 8093 `bd-gw`, 9031 sshd, and the
+  streaming gateway's MediaMTX holds 1935, 8554, 8888, 8889 and 8890 (the
+  [gateway's README](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/gateway#ports)
+  has the full list). A collision is silent:
   the second service fails to bind and its page simply never answers.
 
 ## Limits the format imposes
@@ -117,8 +120,8 @@ What nothing enforces, and what keeps a unit recoverable:
 - **Binaries must be aarch64 ELF**, built for Debian 10's glibc 2.28 or fully
   static. Go with `CGO_ENABLED=0 GOOS=linux GOARCH=arm64` is the easy path;
   the patcher's own [bdplay](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/player)
-  is built that way, and [bdcam](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/converter) and
-  [bdts](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/tailscale-ui) show cgo with zig.
+  and [bdts](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/tailscale-ui) are built
+  that way, and [bdcam](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/converter) shows cgo with zig.
 - **Keep it small.** The whole package is extracted into a temp dir on the
   device before anything runs. Tens of megabytes are proven (Tailscale is
   68 MB unpacked); the patcher refuses a module over 256 MB.
@@ -148,7 +151,7 @@ folder of the patcher's public repo you can read: [bdts](https://github.com/stoa
 if you must touch the UI), [bdcam](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/converter)
 (a self-supervising unit that exits 0 when its device is absent, which turns
 `Restart=always` into a hotplug poller), and
-[bd-play-usb-player](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/player).
+[bdplay](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/player).
 The installer that runs them all is
 [`installer/update`](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/installer/update)
 in the patcher; its `modules` section is the code that runs yours.

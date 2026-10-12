@@ -26,13 +26,18 @@ Each module folder has its own `AGENTS.md` — read it before changing that fold
 
 ## Deploy
 
+Pushing to `main` deploys: `.github/workflows/deploy.yml` runs `npm test` (which assembles the
+assets), smoke-checks the page, runs `wrangler deploy` and then checks the live `<head>` matches.
+A push that only touches docs, `*.md` or a module's source doesn't redeploy; one that changes a
+`*/dist/` binary does. Other branches never deploy. There is **no Cloudflare build connected**.
+By hand:
+
 ```bash
 scripts/build-assets.sh
 cf-run npx wrangler deploy
 ```
 
-Live at <https://birddog-play-patcher.stoatworks-labs.com>. There is **no Cloudflare build
-connected** — deploys are local, so pushing a branch cannot publish to production.
+Live at <https://birddog-play-patcher.stoatworks-labs.com>.
 
 ## Inspecting what the generator produced
 

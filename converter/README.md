@@ -13,10 +13,10 @@ PLAY's USB-A port, out as NDI, SRT or HDMI. NDI is backed by **the device's own
 libndi**, loaded with `dlopen` — the same approach as the `bdkvm` NDI KVM
 endpoint in the `birddog-re` research repo (private).
 
-Outputs are **NDI**, **SRT** and **HDMI**. NDI is uncompressed (libndi's SpeedHQ
-encoder, on the CPU); SRT and HDMI run on the device's own GStreamer, using the
-VEPU hardware H.264 encoder and `kmssink`. The compressed NDI|HX send path is
-still a later milestone (see [Roadmap](#roadmap)).
+Outputs are **NDI**, **SRT** and **HDMI**. NDI is either full bandwidth (libndi's
+SpeedHQ encoder, on the CPU) or NDI|HX, the VEPU's H.264 sent straight out
+(`--ndi-format h264`); SRT and HDMI run on the device's own GStreamer, using the
+VEPU hardware H.264 encoder and `kmssink`.
 
 **Verified on hardware** on a PLAY running 1.0.30: NDI send, SRT out (validated
 by an independent demuxer) and HDMI via `kmssink` all work, and as of
@@ -57,7 +57,7 @@ though that figure was taken with ~1.2 cores of other load on the box.
 Go + [purego](https://github.com/ebitengine/purego) + `zig cc` targeting
 `aarch64-linux-gnu.2.28`, same as `bdkvm`: purego needs cgo for `dlopen`, macOS
 has no aarch64-linux gcc, and the glibc pin keeps the binary compatible with the
-PLAY's Debian 10. Output is `dist/bdcam-linux-arm64` (~3.4 MB).
+PLAY's Debian 10. Output is `dist/bdcam-linux-arm64` (~7.6 MB).
 
 Always build through `build.sh` or with `GOOS=linux` set — this is Linux-only
 code.
@@ -79,10 +79,12 @@ hardware decoder — to EOS with no errors.
 
 ## Install
 
-Through the normal patching path — nothing NDI-derived travels in the package:
+Through the normal patching path — nothing NDI-derived travels in the package.
+The [PLAY Patcher](https://birddog-play-patcher.stoatworks-labs.com)'s *UVC converter*
+option does it in the browser, or from a checkout of the private `birddog-re`:
 
 ```bash
-./build.sh && ~/Projects/birddog-re/tools/fwbuild/build.sh --tag cam --no-tailscale --with-cam
+./build.sh && <birddog-re>/tools/fwbuild/build.sh --tag cam --no-tailscale --with-cam
 ```
 
 Upload the resulting `.fw` through the PLAY's stock web UI. It installs to
@@ -186,7 +188,7 @@ gets split into access units and muxed to MPEG-TS here — the device has no mux
 at all, and its libsrt exists only statically linked inside `PPApp`, so neither
 could be borrowed.
 
-Three limits worth knowing before designing around this, all measured:
+Two limits worth knowing before designing around this, both measured:
 
 - **`mpph264enc` has no tunable properties in this build.** No bitrate, no GOP,
   no rate-control mode; it derives a bitrate from the caps (3.456 Mbps at
@@ -194,9 +196,10 @@ Three limits worth knowing before designing around this, all measured:
 - **Its sink caps stop at 1920×1088 and 60/1**, so 1080p is the ceiling here
   whatever the camera can do. `bdcam` rejects anything larger with a clear
   message rather than letting caps negotiation fail obscurely.
-- **`--output ndi` cannot be combined with `srt` or `hdmi` yet.** The NDI path
-  does its own V4L2 capture while GStreamer owns the camera for the others, and
-  one device cannot have two owners.
+
+Outputs combine freely. NDI on its own from an uncompressed camera does its own
+V4L2 capture; as soon as SRT or HDMI is on too, GStreamer owns the camera and
+hands NDI raw frames over a second pipe, so one capture feeds them all.
 
 ### HDMI has two possible routes
 
@@ -209,10 +212,12 @@ systemctl stop BirdDogRunner      # remember to start it again afterwards
 While it is stopped the HDMI output is dark, which looks like a brick and is
 not. `bdcam` checks and warns before GStreamer hits the failure.
 
-The alternative is to leave `PPApp` running and let *it* do the display: send
-SRT to `127.0.0.1` and point the decoder at it. That costs an encode/decode
-round trip, but both ends are hardware (VEPU out, rkvdec back in at 218 fps), and
-it keeps the OSD, web UI, tally and CloudConnect intact. For a device that
+The alternative is `--hdmi-mode decoder`: leave `PPApp` running and let *it* do
+the display, pointed at bdcam's own NDI over loopback. That needs NDI on and set
+to HX (`--ndi-format h264`), because `PPApp` renders full-bandwidth NDI green, and
+the settings refuse the combination. It costs an encode/decode round trip, but
+both ends are hardware (VEPU out, rkvdec back in at 218 fps), and it keeps the
+OSD, web UI, tally and CloudConnect intact. For a device that
 should still behave like a PLAY, that is usually the better trade.
 
 ## Cameras this kernel cannot see by itself
@@ -256,9 +261,9 @@ and a trimmed frame crashes the hardware decoder just the same.
 
 Two things follow. **The VEPU is the limit for SRT and HDMI at 1080p** — about
 28 ms per frame, so roughly 20 fps once decode is competing with it. And **Go's
-`image/jpeg` is about ten times slower than libjpeg-turbo here**, which makes
-the NDI path unusable with an MJPEG camera at 1080p; it needs to move onto
-GStreamer's decoder, hardware or not.
+`image/jpeg` is about ten times slower than libjpeg-turbo here**, which made
+the NDI path unusable with an MJPEG camera at 1080p. So NDI from an MJPEG camera
+now captures through GStreamer's decoder too, hardware or not.
 
 Note the camera only offers 1920x1080, so dropping to 720p to buy frame rate is
 not available with this source.
@@ -273,13 +278,12 @@ what each costs us downstream:
 | UYVY | hands libndi the driver's mmap'd buffer | nothing |
 | YUYV | byte swap in place | negligible |
 | NV12 | hands libndi the buffer, NDI takes NV12 directly | nothing |
-| MJPEG | **software JPEG decode** (Go's `image/jpeg`) then pack to UYVY | very expensive — measured at 3.9 fps for 1080p end to end |
+| MJPEG | hands capture to GStreamer: `mppjpegdec` in hardware for 4:2:0, `jpegdec` on the CPU for anything else | low for 4:2:0; roughly a core at 1080p otherwise |
 
-The MJPEG path is a placeholder and it is deliberately the last choice. On four
-A53s a 1080p JPEG decode in software is roughly a core on its own, taken from
-the same budget SpeedHQ is already straining. It is there so any camera works on
-day one, not because it is the answer. The real fix is MPP's JPEG decoder on the
-vdpu — see the roadmap.
+MJPEG is still the last choice. On four A53s a 1080p JPEG decode in software is
+roughly a core on its own, taken from the same budget SpeedHQ is already
+straining, and MPP's JPEG decoder on the vdpu only takes 4:2:0 (see
+[above](#the-vpu-jpeg-decoder-cannot-do-422)).
 
 So the first thing to run on the device is:
 
@@ -295,25 +299,16 @@ about SpeedHQ alone. If it is MJPEG-only, subtract a core before you start.
 ## Roadmap
 
 Done, and verified on hardware: NDI send, SRT out, HDMI via `kmssink`, hardware
-JPEG decode on the SRT/HDMI path.
+JPEG decode on the SRT/HDMI path, and, all on 2026-08-13, a real camera, one
+capture feeding NDI alongside SRT and HDMI, MJPEG cameras on the NDI path decoded
+through GStreamer, and NDI|HX straight from the VEPU (30 fps and about 2 Mbps at
+1080p, against 18 fps and roughly 100 Mbps for SpeedHQ).
 
 Still open, roughly in order of value:
 
-1. **A real camera.** Everything so far is `--synthetic`; no UVC device has yet
-   enumerated on the test unit. The first real frame is the outstanding unknown.
-2. **One capture owner**, so `ndi` can be combined with `srt`/`hdmi`. Either
-   move NDI onto the GStreamer pipeline via a second `tee` branch, or have
-   GStreamer feed frames back over the existing pipe.
-3. **Hardware JPEG decode on the NDI path too.** The pipeline path already gets
-   it from `mppjpegdec`; the NDI path still uses Go's `image/jpeg`, which is
-   roughly a core at 1080p.
-4. **Bitrate control**, which means replacing `mpph264enc` — most likely driving
+1. **Bitrate control**, which means replacing `mpph264enc` — most likely driving
    MPP directly, since the element exposes nothing.
-5. **NDI|HX (compressed send).** The device's libndi exports
-   `send_compressed_video` and `codec_h264_hevc_alpha`, so VEPU H.264 → NDI at
-   near-zero CPU is available. Now unblocked by the 30-minute answer above, but
-   still needs the Advanced structs reconstructed without headers.
-6. **Audio** — UAC capture into `NDIlib_send_send_audio_v3`, and into the TS for
+2. **Audio** — UAC capture into `NDIlib_send_send_audio_v3`, and into the TS for
    SRT.
 
 <!-- attributions:start -->
