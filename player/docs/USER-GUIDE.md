@@ -1,22 +1,22 @@
 # bdplay user guide
 
 bdplay adds a **USB** entry to the BirdDog PLAY's source dropdown and **plays video, stills and
-PDFs from a USB stick straight out of HDMI** — hardware decoded, in order or shuffled, looping
+PDFs from a USB stick straight out of HDMI**, hardware decoded, in order or shuffled, looping
 until you stop it.
 
-The PLAY is an NDI/SRT *decoder*: it has no notion of local media. This turns one into a signage
-player **without giving up anything** — select NDI again and the stock decode path comes straight
-back.
+The PLAY is an NDI/SRT *decoder*, and on its own it has no idea what a USB stick is. This turns one
+into a signage player **without giving anything up**: select NDI again and the stock decode path
+comes straight back.
 
 ![bdplay's control page, showing a five-item library, transport controls, live status and log](control-ui.png)
 
-> **Before you rely on this:** every claim here was **measured on a real BirdDog PLAY** — hardware
+> **Before you rely on this:** every claim here was **measured on a real BirdDog PLAY**. Hardware
 > video decode, HDMI audio, stills, PDF rendering, the exFAT mount and the display handover with
-> BirdDog's own decoder are all confirmed working on hardware.
+> BirdDog's own decoder all work on hardware.
 >
-> That is **one unit on one firmware version.** It has not been tested across the range of PLAY and
-> Pod firmwares in the field, and **USB hotplug with a physical stick is still unverified** —
-> testing used a loop device and internal storage.
+> That's **one unit on one firmware version.** It hasn't been tested across the range of PLAY and
+> Pod firmwares out there, and **USB hotplug with a physical stick is still unverified**: testing
+> used a loop device and internal storage.
 >
 > This codebase was created with AI assistance, directed and reviewed by a human author.
 
@@ -25,15 +25,15 @@ back.
 ## Installing
 
 **The easy way is a checkbox in the [PLAY Patcher](https://birddog-play-patcher.stoatworks-labs.com)**,
-which assembles the firmware package in your browser — no toolchain, nothing to build.
+which puts the firmware package together in your browser. No toolchain, nothing to compile.
 
 ![The USB media player option in the PLAY Patcher](patcher-option.png)
 
 To install by hand, copy the binary and its service unit onto the unit over SSH (**port 9031** on
 stock BirdDog firmware) and enable the service.
 
-On start it patches the video settings page to add the USB option. `bdplay -unpatch-ui` removes it
-again — the stock page is untouched apart from one added option.
+On start it patches the video settings page to add the USB option. `bdplay -unpatch-ui` takes it
+out again, and apart from that one option the stock page is left alone.
 
 ---
 
@@ -44,18 +44,18 @@ A panel appears with the stick's contents.
 
 ![The USB media player panel inside the stock AV Setup page](birdui-panel.png)
 
-**There is also a standalone control page on port 8091**, which additionally shows the log — **use
-that if the injected panel does not appear**, and use it first when something will not play,
-because the log answers most of those questions.
+**There's also a standalone control page on port 8091**, which shows the log as well. **Use that if
+the injected panel doesn't appear**, and go there first when something won't play, because the log
+answers most of those questions.
 
-Everything is drivable from the API too, so a Companion button or a cron job works.
+Everything can be driven from the API too, so a Companion button or a cron job works.
 
 ### From the TV's remote
 
-If the TV supports HDMI-CEC (Samsung call it Anynet+, LG SimpLink, Sony Bravia Sync — it is usually
-on by default), the PLAY's own on-screen source list is already driven by the TV's remote. bdplay
-adds a **USB-Player** entry to that list: press **Left/Right** to reach the SRT page, **Up/Down** to
-it and **OK**. A file browser for the stick appears on the TV, driven by the same remote:
+If the TV supports HDMI-CEC (Samsung call it Anynet+, LG SimpLink, Sony Bravia Sync, and it's
+usually on by default), the PLAY's own on-screen source list already follows the TV's remote. bdplay
+adds a **USB-Player** entry to that list: press **Left/Right** to get to the SRT page, **Up/Down** to
+it and **OK**. A file browser for the stick comes up on the TV, driven by the same remote:
 
 | Key | Does |
 |---|---|
@@ -68,9 +68,9 @@ it and **OK**. A file browser for the stick appears on the TV, driven by the sam
 | **Red** | straight back to BirdDog |
 | **Blue** / **Yellow** | shuffle / loop on and off |
 
-A single file plays once and returns to the list; a picture stays up until you press a key. The
-same browser can be opened from the control page on port 8091 (**OPEN BROWSER ON HDMI**), which
-also has the remote's keys as buttons — handy when the TV forwards only some of them, which varies
+A single file plays once and goes back to the list; a picture stays up until you press a key. You
+can open the same browser from the control page on port 8091 (**OPEN BROWSER ON HDMI**), which also
+has the remote's keys as buttons. That's handy when the TV only forwards some of them, which varies
 by make. Arrows and OK work on every CEC TV; the transport and colour keys on most.
 
 ---
@@ -84,23 +84,23 @@ by make. Arrows and OK work on every CEC TV; the transport and colour keys on mo
 | **PDF** | pdf | Pages pre-rendered to images, then played as stills — 3 pages at 1080p in ~1.3 s |
 | **Office** | pptx, docx, … | **Not rendered.** Listed with "export to PDF" rather than silently ignored |
 
-**PowerPoint is deliberately out of scope.** Rendering it on-device would mean either a full office
-suite — which will not fit or perform on 2 GB and four small cores — or a partial renderer that
-misdraws SmartArt, charts and embedded fonts, **looking broken in exactly the situations where a
-deck matters.** Exporting to PDF is one step and renders exactly as authored.
+**PowerPoint is out of scope, on purpose.** Rendering it on the device would mean either a full
+office suite, which won't fit or run on 2 GB and four small cores, or a partial renderer that
+mangles SmartArt, charts and embedded fonts, **looking broken in exactly the situations where a
+deck matters.** Exporting to PDF is one step, and it renders exactly as authored.
 
 ---
 
 ## Playback options
 
-- **Selection** — one file, one folder (optionally including subfolders), or the whole stick.
-- **Order** — as listed (**natural sort, so `slide2` precedes `slide10`**) or random.
-- **Loop** — on by default.
-- **Dwell** — how long each still or PDF page holds the screen.
+- **Selection:** one file, one folder (with its subfolders if you like), or the whole stick.
+- **Order:** as listed (**natural sort, so `slide2` precedes `slide10`**) or random.
+- **Loop:** on by default.
+- **Dwell:** how long each still or PDF page holds the screen.
 
 **Random reshuffles the whole set each cycle** rather than picking independently, so every file
-plays once per cycle instead of some repeating while others starve — and **the reshuffle never puts
-the item that just played at the front of the next cycle.**
+plays once per cycle instead of some repeating while others never get a look in, and **the reshuffle
+never puts the item that just played at the front of the next cycle.**
 
 ---
 
