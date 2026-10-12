@@ -32,10 +32,10 @@ standalone overlay installer, not a modified copy of BirdDog's firmware.
 1. **Paste your SSH public key**: the single line from your `.pub` file, starting `ssh-ed25519`
    or `ssh-rsa`. It's appended to `/root/.ssh/authorized_keys` on the device. The page refuses a
    private key, more than one line, or anything `sshd` wouldn't load.
-2. **Choose the payload.** Tailscale is on by default; the NDI KVM endpoint, the USB media player
-   and the UVC converter are off. Each option says what it installs and, for the two beta ones,
-   what's known to be rough. *Reboot when finished* is off by default; without it the installer
-   brings the display back itself.
+2. **Choose the payload.** Tailscale is on by default; the NDI KVM endpoint, the USB media player,
+   the UVC converter and the streaming gateway are off. Each option says what it installs and, for
+   the three beta ones, what's known to be rough. *Reboot when finished* is off by default; without
+   it the installer brings the display back itself.
 3. **Optionally add your own modules** under *Custom modules* (see [Custom modules](#custom-modules)).
 4. **Build.** The build tag names the file and is logged on the device. If you want to pin a
    Tailscale version or build offline, supply `tailscale_<version>_arm64.tgz` yourself; otherwise
@@ -62,12 +62,13 @@ one's is **a readable bash script rather than a vendor binary.**
 
 That's why this tool can be a static page: there's no payload to decrypt and no key involved, so
 there's nothing to upload and nothing to protect server-side. The only server-side part is a
-proxy for Tailscale's download host, which doesn't send a CORS header.
+proxy for two download hosts that don't send a CORS header: Tailscale's, and GitHub's release
+downloads for the streaming gateway's pinned MediaMTX.
 
 **This project contains no BirdDog firmware, no vendor keys, and no way to decrypt one.**
 
-> **Read the installer before you run it.** It's 500 lines of commented bash, it runs as root on
-> your device, and you shouldn't take anyone's word for what it does.
+> **Read the installer before you run it.** It's over 600 lines of commented bash, it runs as root
+> on your device, and you shouldn't take anyone's word for what it does.
 
 ---
 
@@ -230,20 +231,39 @@ and read *Building a module* on the site. A module built from the template can b
 
 ## Undoing it
 
-Over SSH, in this order. The first line puts the System page back as it shipped, and the untouched
-original is also kept beside it as `settings.html.bdts-stock`:
+Over SSH, run the lines for each option you installed, in this order. For the gateway, clear
+**Show on HDMI** in its tab first so the decoder is handed back.
 
 ```
-/userdata/bd-tailscale-ui/bdts --unpatch-ui && systemctl restart BirdDogWebUI
-systemctl disable --now bd-tailscaled bd-kvm bd-tailscale-ui
-rm -rf /userdata/tailscale /userdata/bd-kvm /userdata/bd-tailscale-ui /etc/systemd/system/bd-{tailscaled,kvm,tailscale-ui}.service
+# USB media player
+systemctl disable --now bd-play
+/userdata/bd-play/bdplay -unpatch-ui
+/userdata/bd-play/bdplay -unregister-osd-entry
+# UVC converter
+systemctl disable --now bd-cam bd-cam-api
+/userdata/bd-cam/bdcam --unpatch-ui /srv/birddog-web-ui
+# streaming gateway
+systemctl disable --now bd-mtx bd-gw
+/userdata/bd-gw/bdgw --unpatch-ui
+# Tailscale and its System page panel
+systemctl disable --now bd-tailscale-ui bd-tailscaled
+/userdata/bd-tailscale-ui/bdts --unpatch-ui
+# NDI KVM endpoint
+systemctl disable --now bd-kvm
+# then, whatever you installed
+systemctl restart BirdDogWebUI
+rm -rf /userdata/tailscale /userdata/bd-{tailscale-ui,kvm,play,cam,gw} \
+  /etc/systemd/system/bd-{tailscaled,tailscale-ui,kvm,play,cam,cam-api,mtx,gw}.service \
+  /userdata/bd-probe.txt /userdata/bd-modules.log /srv/birddog-web-ui/static/bd-probe.txt
 ```
 
-The media player and the converter restore their page edits with `bdplay -unpatch-ui` and
-`bdcam --unpatch-ui`; a module built from the template leaves `bash /userdata/bd-<name>/uninstall`.
-For the gateway, clear **Show on HDMI** in its tab first so the decoder is handed back, then
-`/userdata/bd-gw/bdgw --unpatch-ui && systemctl restart BirdDogWebUI`,
-`systemctl disable --now bd-mtx bd-gw` and `rm -rf /userdata/bd-gw /etc/systemd/system/bd-{mtx,gw}.service`.
+Each service stops before its page edit comes out, because the player puts its **USB** entry
+back every time it starts. The player goes first because its unpatch puts back the whole page as
+it found it, which can include the converter's and the gateway's tabs; theirs take out only their
+own. Copies of each page as it was found stay beside them in `/srv/birddog-web-ui/` as
+`settings.html.bdts-stock`, `videoset.html.bdcam-orig` and `videoset.html.bdgw-stock`. Your key
+stays in `/root/.ssh/authorized_keys`, and a module built from the template leaves
+`bash /userdata/bd-<name>/uninstall`.
 
 Then reflash stock firmware if you want a clean unit. Recovery-mode flashing of the factory image
 is a proven path, but it restores **factory** state, not this unit's provisioned serial, hostname

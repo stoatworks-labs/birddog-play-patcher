@@ -52,7 +52,8 @@ than a vendor binary.
 
 That's why this tool can be a static page: there's no payload to decrypt and no key involved,
 so there's nothing to upload and nothing to protect server-side. The only server-side part is a
-proxy for `pkgs.tailscale.com`, which doesn't send a CORS header.
+proxy for two download hosts that don't send a CORS header: `pkgs.tailscale.com`, and GitHub's
+release downloads for the streaming gateway's pinned MediaMTX.
 
 **This repository contains no BirdDog firmware, no vendor keys and no way to decrypt one.**
 It only ships code written for this project.
@@ -63,8 +64,13 @@ It only ships code written for this project.
 |---|---|---|
 | `/root/.ssh/authorized_keys` | your key, appended, mode 600 | yes — the vendor installs with `cp -rf`, which is additive |
 | `/userdata/tailscale/` | `tailscaled` + `tailscale`, 68 MB | expected, but not guaranteed |
+| `/userdata/bd-tailscale-ui/` | `bdts`, the Tailscale panel on the web UI's System page | expected, but not guaranteed |
 | `/userdata/bd-kvm/` | `bdkvm` + `run.sh` | yes — deliberately not `/userdata/birddog-kvm`, which the vendor updater deletes |
-| `/etc/systemd/system/bd-{tailscaled,kvm}.service` | units | yes |
+| `/etc/systemd/system/bd-{tailscaled,tailscale-ui,kvm}.service` | units | yes |
+| `/userdata/bd-play/` | USB media player (beta): `bdplay`, plus the PDF and exFAT helpers when the build carries them | expected, but not guaranteed |
+| `/etc/systemd/system/bd-play.service` | player unit | yes |
+| `/userdata/bd-cam/` | UVC converter (beta): `bdcam`, its run scripts and `bdcam.conf` | expected, but not guaranteed |
+| `/etc/systemd/system/bd-{cam,cam-api}.service` | converter units | yes |
 | `/userdata/bd-gw/` | streaming gateway (beta): `mediamtx` 62 MB, `bdgw`, its `config.json` | expected, but not guaranteed |
 | `/etc/systemd/system/bd-{mtx,gw}.service` | gateway units | yes |
 | `/userdata/bd-probe.txt` | first-boot hardware report | yes |
@@ -79,7 +85,7 @@ Everything substantial lives on the `/userdata` partition. The installer:
   bad install can't break the boot chain;
 - is idempotent, and doesn't reboot unless you ask it to.
 
-Read [`installer/update`](installer/update) before you run it. It's 500 lines of commented
+Read [`installer/update`](installer/update) before you run it. It's over 600 lines of commented
 bash, it runs as root on your device, and you shouldn't take anyone's word for what it does,
 mine included.
 
@@ -140,7 +146,7 @@ to 1080p60/2160p30, HEVC to 2160p60; WebRTC must send H.264) and the hardware li
 
 ## Custom modules
 
-The four payloads above are modules in all but packaging, and the generator takes yours too.
+The five payloads above are modules in all but packaging, and the generator takes yours too.
 A **module** is a directory (`module.conf` with `NAME` and `VERSION`, an executable `install`,
 and whatever payload it needs) shipped as a `.tgz`. Choose it under *Custom modules*. The page
 reads it in the browser, checks its structure and writes it into the `.fw` at
@@ -207,12 +213,40 @@ reflash stock firmware through the normal web UI, or use Rockchip recovery mode.
 that recovery restores *factory* state, not the unit's provisioned serial, hostname or
 `/userdata`.
 
-To remove everything this installs:
+To remove everything this installs, SSH in and run the lines for each option you installed, in
+this order. If the streaming gateway is on HDMI, clear **Show on HDMI** on its tab first so the
+decoder is handed back.
 
 ```bash
-systemctl disable --now bd-tailscaled bd-kvm
-rm -rf /userdata/tailscale /userdata/bd-kvm /etc/systemd/system/bd-{tailscaled,kvm}.service
+# USB media player
+systemctl disable --now bd-play
+/userdata/bd-play/bdplay -unpatch-ui
+/userdata/bd-play/bdplay -unregister-osd-entry
+# UVC converter
+systemctl disable --now bd-cam bd-cam-api
+/userdata/bd-cam/bdcam --unpatch-ui /srv/birddog-web-ui
+# streaming gateway
+systemctl disable --now bd-mtx bd-gw
+/userdata/bd-gw/bdgw --unpatch-ui
+# Tailscale and its System page panel
+systemctl disable --now bd-tailscale-ui bd-tailscaled
+/userdata/bd-tailscale-ui/bdts --unpatch-ui
+# NDI KVM endpoint
+systemctl disable --now bd-kvm
+# then, whatever you installed
+systemctl restart BirdDogWebUI
+rm -rf /userdata/tailscale /userdata/bd-{tailscale-ui,kvm,play,cam,gw} \
+  /etc/systemd/system/bd-{tailscaled,tailscale-ui,kvm,play,cam,cam-api,mtx,gw}.service \
+  /userdata/bd-probe.txt /userdata/bd-modules.log /srv/birddog-web-ui/static/bd-probe.txt
 ```
+
+Each service stops before its page edit comes out, because the player puts its **USB** entry
+back every time it starts. The player goes first because its unpatch puts back the whole page as
+it found it, which can include the converter's and the gateway's tabs; theirs take out only
+their own. That leaves your key in `/root/.ssh/authorized_keys`, the copies of each page as it
+was found (`settings.html.bdts-stock`, `videoset.html.bdcam-orig` and `videoset.html.bdgw-stock`
+in `/srv/birddog-web-ui/`), and any custom modules. A module built from the template removes
+itself with `bash /userdata/bd-<name>/uninstall`.
 
 <!-- attributions:start -->
 This project is built on other people's work — see [ATTRIBUTIONS.md](ATTRIBUTIONS.md).
