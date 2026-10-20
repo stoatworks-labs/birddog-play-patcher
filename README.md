@@ -177,6 +177,8 @@ npx wrangler dev             # serve locally
 node test/build-package.mjs  # build a package in Node and verify its structure
 MTX_TGZ=/path/to/mediamtx_v1.21.0_linux_arm64.tar.gz node test/build-package.mjs   # offline
 node test/modules.mjs        # read module archives written by the system tar
+scripts/make-kit.sh          # the release kit, for Burrow
+node test/kit.mjs            # build the kit and check it against the package
 ```
 
 Everything the package installs on the device has its source here. Each Go program is its
@@ -201,6 +203,13 @@ test checks that the `update` inside a generated package is byte-identical to
 the **system** tar (GNU tar in CI, bsdtar on a Mac), so the module reader is checked against
 what actual tar programs emit (pax headers, GNU long names, ustar prefixes) rather than against
 `fw.js` marking its own homework.
+
+Each release carries `birddog-play-patcher-kit-<version>.zip`: the installer and the module
+binaries the page packs, their licence notices, and `kit.json`, which says where each file goes
+in a package. [Burrow](https://github.com/stoatworks-labs/burrow) builds packages from it.
+[`kit/README.md`](kit/README.md) has the format. Where each member goes lives in one table,
+`PACKAGE` in `fw.js`, which the page packs from too, and `test/kit.mjs` rebuilds the test
+package from `kit.json` alone and requires the same tar, byte for byte.
 
 **The tar layer is reproducible; the `.fw` isn't.** Identical inputs produce a byte-identical
 tar in both Chrome and Node, but the two engines configure zlib differently, so the same tar

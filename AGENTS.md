@@ -24,7 +24,8 @@ public/
   fw.js          THE ENGINE. ustar writer + reader (pax/GNU/prefix aware), gzip, SHA-256,
                  tailscale extraction, and readModule — the only gate a user's module passes.
                  No DOM, no network — that is what lets test/ exercise the real module.
-  app.js         UI, fetch, progress log. Imports fw.js.
+                 PACKAGE/OPTIONS: every member a package carries, in pack order.
+  app.js         UI, fetch, progress log. Imports fw.js and packs from PACKAGE.
   index.html     the page, including the operational warnings
   modules.html   the contract for third-party modules, written for their authors
   site.css       shared by both pages
@@ -41,7 +42,9 @@ tailscale-ui/    bdts, the birdUI Tailscale panel — Go source and dist/
 module-template/ a working third-party module; CI proves fw.js accepts it
 test/            builds a package in Node using public/fw.js; modules.mjs reads archives
                  written by the SYSTEM tar; fixtures/module/ is the module the CI package carries
-scripts/         build-assets.sh (assemble), sync-from-re.sh (pull from upstream research repo)
+scripts/         build-assets.sh (assemble), sync-from-re.sh (pull from upstream research repo),
+                 make-kit.sh + kit.mjs (the release kit)
+kit/             what the release kit adds: NOTICE.md, licenses/, and README.md (the format)
 ```
 
 ## 3. Where the truth lives
@@ -101,6 +104,17 @@ authors is `public/modules.html`; the reference implementation of an author's si
   `gateway/render.go` (CI fails if not) and `MEDIAMTX_VERSION` in birddog-re's `build.sh`
   (private, so nothing checks it) — the gateway's rendered configuration is only validated
   against that one release.
+- **Member paths live in `PACKAGE` in `fw.js`, not in `app.js`.** The release kit's `kit.json`
+  is written from the same table, and Burrow builds packages from that, so a path or mode typed
+  into `app.js` would make the page and Burrow build different packages. `test/kit.mjs` fails if
+  `app.js` names a member path or asset of its own, packs out of table order, or if a package
+  built from `kit.json` alone isn't byte-identical to `test/build-package.mjs`'s. That test file
+  keeps its own hand-written paths on purpose, as the independent copy; change both.
+- **The kit never carries Tailscale, MediaMTX, mutool, a vendor `.fw` or a key.** `test/kit.mjs`
+  checks the first three by name and the vendor payload by content. It carries the licence
+  notices and source offer the page shows; `kit/licenses/pdfium/` is the licence directory of
+  the exact pdfium-binaries release `player/dist/libpdfium.so` came from (chromium/7999), so
+  replace both together.
 - **The gateway never ships a `config.json`.** It is the device's own settings; the test
   asserts the package carries none.
 

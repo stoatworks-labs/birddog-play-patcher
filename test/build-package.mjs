@@ -182,6 +182,17 @@ tar.file('./userdata/birddog-kvm/bdkvm', bdkvm, 0o755);
 tar.file('./userdata/birddog-kvm/run.sh',
   new Uint8Array(await readFile(join(ASSETS, 'kvm-run.sh'))), 0o755);
 
+// The UVC converter, between the KVM and the player as the page packs it.
+const bdcam = new Uint8Array(await readFile(join(ASSETS, 'bdcam-linux-arm64')));
+check(isArm64Elf(bdcam), 'bdcam is an aarch64 ELF');
+tar.file('./userdata/bd-cam/bdcam', bdcam, 0o755);
+for (const [asset, dest] of [['cam-run.sh', './userdata/bd-cam/run.sh'], ['cam-api-run.sh', './userdata/bd-cam/api-run.sh']]) {
+  const data = await readFile(join(ASSETS, asset));
+  check(Buffer.compare(data, await readFile(join(REPO, 'installer', asset))) === 0,
+    `public/assets/${asset} === installer/${asset}`);
+  tar.file(dest, new Uint8Array(data), 0o755);
+}
+
 // USB media player. libpdfium.so is a shared object rather than an executable,
 // but isArm64Elf only asserts the ELF header and machine type, which is what
 // matters — a host-built x86 file reaching the device is the failure to catch.
@@ -247,6 +258,7 @@ for (const n of [
   './userdata/tailscale/tailscaled', './userdata/tailscale/tailscale',
   './userdata/bd-tailscale-ui/bdts',
   './userdata/birddog-kvm/bdkvm', './userdata/birddog-kvm/run.sh',
+  './userdata/bd-cam/bdcam', './userdata/bd-cam/run.sh', './userdata/bd-cam/api-run.sh',
   './userdata/bd-play/bdplay', './userdata/bd-play/bdpdf',
   './userdata/bd-play/libpdfium.so', './userdata/bd-play/mount.exfat-fuse',
   './modules/citest-mod/install', './modules/citest-mod/module.conf',

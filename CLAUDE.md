@@ -10,6 +10,8 @@ scripts/build-assets.sh          # assemble public/assets/ — run this first, i
 npx wrangler dev --port 8792     # serve the page + the tailscale proxy
 node test/build-package.mjs      # build a package in Node, verify structure
 node test/modules.mjs            # module archives written by the system tar must read and refuse right
+scripts/make-kit.sh [outdir]     # the release kit Burrow builds packages from (kit/README.md)
+node test/kit.mjs                # build the kit and rebuild the CI package from it (after build-package)
 TS_TGZ=/path/to/tailscale_x_arm64.tgz node test/build-package.mjs   # offline
 MTX_TGZ=/path/to/mediamtx_vX_linux_arm64.tar.gz node test/build-package.mjs   # offline, the gateway half
 scripts/sync-from-re.sh [path]   # pull installer/agent from the research repo; exits 1 on change
@@ -38,6 +40,12 @@ cf-run npx wrangler deploy
 ```
 
 Live at <https://birddog-play-patcher.stoatworks-labs.com>.
+
+## Release
+
+Local, with no workflow: `scripts/make-kit.sh` on a clean checkout of `main`, then
+`gh release create v<package.json version>` with `kit/out/birddog-play-patcher-kit-<version>.zip`
+attached. Burrow downloads that asset and checks it against the `digest` GitHub records.
 
 ## Inspecting what the generator produced
 

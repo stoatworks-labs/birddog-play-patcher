@@ -8,7 +8,8 @@
   "scripts": {
     "assets": "scripts/build-assets.sh",
     "dev": "scripts/build-assets.sh && wrangler dev --port 8792",
-    "test": "scripts/build-assets.sh && node test/build-package.mjs && node test/modules.mjs",
+    "test": "scripts/build-assets.sh && node test/build-package.mjs && node test/modules.mjs && node test/kit.mjs",
+    "kit": "scripts/make-kit.sh",
     "deploy": "scripts/build-assets.sh && wrangler deploy"
   },
   "devDependencies": {

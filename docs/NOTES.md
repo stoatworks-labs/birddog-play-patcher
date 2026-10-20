@@ -120,4 +120,20 @@ unarchived, with a "moved" notice at the top of their READMEs.
 - The bd-play-module-template repo is still a GitHub *template* repository, so "Use this
   template" there copies the old tree with its "moved" notice.
 
+**Release kit for Burrow, 2026-10-20 (v0.3.0, the first tagged release).** Burrow v0.5.0 builds
+PLAY packages natively, and can only download from GitHub. The page's assets are served from
+its own origin, so `scripts/make-kit.sh` now packs them as `birddog-play-patcher-kit-<v>.zip`
+with a `kit.json` (format in `kit/README.md`), released locally with `gh release create`.
+- The member table moved out of `app.js` into `PACKAGE`/`OPTIONS` in `fw.js`, so the page and the
+  kit read one copy. Checked in Chrome: the old and new page built byte-identical `.fw` files
+  for KVM + UVC + player (`03e8c7d1…`) and for every option with local Tailscale 1.104.1 and
+  MediaMTX v1.21.0 tarballs (`52f77a8e…`, 79.1 MB).
+- `test/build-package.mjs` now packs the UVC converter too; it never had, though the page does.
+- `player/dist/libpdfium.so` is byte-identical to pdfium-binaries `chromium/7999`'s
+  `pdfium-linux-arm64`, which is where `kit/licenses/pdfium/` comes from. `bdpdf/build.sh`
+  fetches `latest`, so a rebuild changes that.
+- **Not fixed, follow-up:** `RESERVED_MODULE_NAMES` lacks `tailscaled`, and the template names
+  its unit `bd-<NAME>.service`, so a module called `tailscaled` would overwrite the Tailscale
+  daemon's unit. birddog-re's list needs the same change.
+
 Related: [compressionstream gzip engine variance](https://github.com/stoatworks-labs/fleet-notes/blob/main/notes/reference_compressionstream_gzip_engine_variance.md), **release workflow** (working-practice note, kept in Claude memory).

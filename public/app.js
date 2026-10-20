@@ -3,7 +3,7 @@
 
 import {
   Tar, extractTailscale, extractMediaMTX, sha256Hex, buildConf, validateKey, humanSize,
-  readModule, addModule, MODULE_MAX_BYTES,
+  readModule, addModule, MODULE_MAX_BYTES, PART, partsOf, cleanTag, packageName,
 } from './fw.js';
 
 const els = {};
@@ -26,6 +26,24 @@ async function asset(path) {
   const res = await fetch(path, { cache: 'no-cache' });
   if (!res.ok) throw new Error(`missing build asset ${path} (${res.status}) — run build-assets.sh`);
   return new Uint8Array(await res.arrayBuffer());
+}
+
+// One staged asset from the fw.js table, checked against the size and SHA-256
+// build-assets.sh recorded for it, then added at its member path.
+async function addVerified(tar, part) {
+  const meta = manifest[part.id];
+  const data = await asset(`assets/${part.asset}`);
+  if (data.length !== meta.size) throw new Error(`${part.label} asset size mismatch`);
+  if ((await sha256Hex(data)) !== meta.sha256) {
+    throw new Error(`${part.label} asset SHA-256 mismatch`);
+  }
+  tar.file(part.member, data, part.mode);
+  return data;
+}
+
+/** A staged script, added as it is. */
+async function addScript(tar, part) {
+  tar.file(part.member, await asset(`assets/${part.asset}`), part.mode);
 }
 
 async function fetchTailscale() {
@@ -173,21 +191,24 @@ async function build() {
     }
     const withModules = modules.length > 0;
     const doReboot = els.optReboot.checked;
-    const tag = (els.tag.value.trim() || 'web').replace(/[^A-Za-z0-9._-]/g, '-');
+    const tag = cleanTag(els.tag.value);
 
+    // Every member path, mode and asset name below comes from PACKAGE in
+    // fw.js, which is also what the release kit describes to Burrow. Keep the
+    // order of the blocks the order of that table.
     const tar = new Tar();
 
     log('adding installer from tools/fwbuild/payload…');
-    tar.file('./update', await asset('assets/update'), 0o755);
-    tar.file('./probe.sh', await asset('assets/probe.sh'), 0o755);
+    await addScript(tar, PART.update);
+    await addScript(tar, PART.probe);
     log(`  update   sha256 ${manifest.update.sha256.slice(0, 16)}…`);
     log(`  probe.sh sha256 ${manifest.probe.sha256.slice(0, 16)}…`);
 
-    tar.text('./authorized_keys', keyText + '\n', 0o600);
-    tar.text('./build.conf', buildConf({
+    tar.text(PART.authorizedKeys.member, keyText + '\n', PART.authorizedKeys.mode);
+    tar.text(PART.buildConf.member, buildConf({
       tag, withTailscale, withTailscaleUi, withKvm, withPlay, withCam, withCamUi,
       withGateway, withGatewayUi, withModules, doReboot,
-    }), 0o644);
+    }), PART.buildConf.mode);
 
     for (const rel of manifest.rootfsOverlay || []) {
       tar.file(`./files/${rel}`, await asset(`assets/files/${rel}`), 0o644);
@@ -201,17 +222,11 @@ async function build() {
       const bins = await extractTailscale(src.buf);
       log(`  tailscaled ${humanSize(bins.tailscaled.length)} + tailscale ` +
           `${humanSize(bins.tailscale.length)}, aarch64 ELF`, 'ok');
-      tar.file('./userdata/tailscale/tailscaled', bins.tailscaled, 0o755);
-      tar.file('./userdata/tailscale/tailscale', bins.tailscale, 0o755);
+      for (const p of [PART.tailscaled, PART.tailscale]) tar.file(p.member, bins[p.take], p.mode);
       log(`tailscale ${src.version} staged`, 'ok');
 
       if (withTailscaleUi) {
-        const bdts = await asset('assets/bdts-linux-arm64');
-        if (bdts.length !== manifest.bdts.size) throw new Error('bdts asset size mismatch');
-        if ((await sha256Hex(bdts)) !== manifest.bdts.sha256) {
-          throw new Error('bdts asset SHA-256 mismatch');
-        }
-        tar.file('./userdata/bd-tailscale-ui/bdts', bdts, 0o755);
+        const bdts = await addVerified(tar, PART.bdts);
         log(`  birdUI panel ${humanSize(bdts.length)}, sha256 verified — ` +
             'sign in from the System page, no SSH needed', 'ok');
       } else {
@@ -223,13 +238,8 @@ async function build() {
 
     if (withKvm) {
       log('adding the NDI KVM endpoint…');
-      const bdkvm = await asset('assets/bdkvm-linux-arm64');
-      if (bdkvm.length !== manifest.bdkvm.size) throw new Error('bdkvm asset size mismatch');
-      if ((await sha256Hex(bdkvm)) !== manifest.bdkvm.sha256) {
-        throw new Error('bdkvm asset SHA-256 mismatch');
-      }
-      tar.file('./userdata/birddog-kvm/bdkvm', bdkvm, 0o755);
-      tar.file('./userdata/birddog-kvm/run.sh', await asset('assets/kvm-run.sh'), 0o755);
+      const bdkvm = await addVerified(tar, PART.bdkvm);
+      await addScript(tar, PART.kvmRun);
       log(`  bdkvm ${humanSize(bdkvm.length)}, sha256 verified`, 'ok');
     } else {
       log('NDI KVM: skipped');
@@ -237,14 +247,9 @@ async function build() {
 
     if (withCam) {
       log('adding the UVC converter…');
-      const bdcam = await asset('assets/bdcam-linux-arm64');
-      if (bdcam.length !== manifest.bdcam.size) throw new Error('bdcam asset size mismatch');
-      if ((await sha256Hex(bdcam)) !== manifest.bdcam.sha256) {
-        throw new Error('bdcam asset SHA-256 mismatch');
-      }
-      tar.file('./userdata/bd-cam/bdcam', bdcam, 0o755);
-      tar.file('./userdata/bd-cam/run.sh', await asset('assets/cam-run.sh'), 0o755);
-      tar.file('./userdata/bd-cam/api-run.sh', await asset('assets/cam-api-run.sh'), 0o755);
+      const bdcam = await addVerified(tar, PART.bdcam);
+      await addScript(tar, PART.camRun);
+      await addScript(tar, PART.camApiRun);
       log(`  bdcam ${humanSize(bdcam.length)}, sha256 verified`, 'ok');
       log(withCamUi
         ? '  web UI tab: yes — videoset.html patched, BirdDogWebUI restarted with rollback'
@@ -258,25 +263,14 @@ async function build() {
       // The player itself is required; the two helpers are optional, and the
       // installer reports which capabilities it ended up with. A package
       // without them still plays video and stills off FAT32/NTFS.
-      const parts = [
-        ['bdplay', 'assets/bdplay-linux-arm64', './userdata/bd-play/bdplay', manifest.bdplay, true],
-        ['bdpdf', 'assets/bdpdf-linux-arm64', './userdata/bd-play/bdpdf', manifest.bdpdf, false],
-        ['libpdfium.so', 'assets/libpdfium.so', './userdata/bd-play/libpdfium.so', manifest.pdfium, false],
-        ['exFAT helper', 'assets/mount.exfat-fuse', './userdata/bd-play/mount.exfat-fuse', manifest.exfat, false],
-      ];
-      for (const [label, url, dest, meta, required] of parts) {
-        if (!meta) {
-          if (required) throw new Error(`${label} asset is missing from this build`);
-          log(`  ${label}: not available — skipped`);
+      for (const part of partsOf('player')) {
+        if (!manifest[part.id]) {
+          if (part.required) throw new Error(`${part.label} asset is missing from this build`);
+          log(`  ${part.label}: not available — skipped`);
           continue;
         }
-        const data = await asset(url);
-        if (data.length !== meta.size) throw new Error(`${label} asset size mismatch`);
-        if ((await sha256Hex(data)) !== meta.sha256) {
-          throw new Error(`${label} asset SHA-256 mismatch`);
-        }
-        tar.file(dest, data, 0o755);
-        log(`  ${label} ${humanSize(data.length)}, sha256 verified`, 'ok');
+        const data = await addVerified(tar, part);
+        log(`  ${part.label} ${humanSize(data.length)}, sha256 verified`, 'ok');
       }
       if (!manifest.bdpdf || !manifest.pdfium) log('  PDF playback will be unavailable');
       if (!manifest.exfat) log('  exFAT sticks will not mount');
@@ -291,17 +285,12 @@ async function build() {
         : await fetchMediaMTX();
       const mtx = await extractMediaMTX(src.buf);
       log(`  mediamtx ${humanSize(mtx.mediamtx.length)}, aarch64 ELF`, 'ok');
-      tar.file('./userdata/bd-gw/mediamtx', mtx.mediamtx, 0o755);
-      if (mtx.license) tar.file('./userdata/bd-gw/LICENSE.mediamtx', mtx.license, 0o644);
+      tar.file(PART.mediamtx.member, mtx.mediamtx, PART.mediamtx.mode);
+      if (mtx.license) tar.file(PART.mediamtxLicense.member, mtx.license, PART.mediamtxLicense.mode);
 
-      const bdgw = await asset('assets/bdgw-linux-arm64');
-      if (bdgw.length !== manifest.bdgw.size) throw new Error('bdgw asset size mismatch');
-      if ((await sha256Hex(bdgw)) !== manifest.bdgw.sha256) {
-        throw new Error('bdgw asset SHA-256 mismatch');
-      }
-      tar.file('./userdata/bd-gw/bdgw', bdgw, 0o755);
-      tar.file('./userdata/bd-gw/run.sh', await asset('assets/gw-run.sh'), 0o755);
-      tar.file('./userdata/bd-gw/api-run.sh', await asset('assets/gw-api-run.sh'), 0o755);
+      const bdgw = await addVerified(tar, PART.bdgw);
+      await addScript(tar, PART.gwRun);
+      await addScript(tar, PART.gwApiRun);
       log(`  bdgw ${humanSize(bdgw.length)}, sha256 verified — MediaMTX ${src.version} staged`, 'ok');
       log(withGatewayUi
         ? '  web UI tab: yes — videoset.html patched beside the UVC tab, BirdDogWebUI restarted with rollback'
@@ -325,7 +314,7 @@ async function build() {
     const blob = await tar.gzip();
     const digest = await sha256Hex(blob);
 
-    built = { blob, name: `BirdDog_PLAY-custom-${tag}.fw`, sha256: digest };
+    built = { blob, name: packageName(tag), sha256: digest };
 
     log(`built ${built.name} — ${humanSize(blob.size)}`, 'ok');
     els.resultName.textContent = built.name;

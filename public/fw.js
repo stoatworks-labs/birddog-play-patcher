@@ -477,6 +477,77 @@ export function addModule(tar, mod) {
   for (const f of mod.files) tar.file(`${MODULE_PREFIX}${mod.name}/${f.path}`, f.data, f.mode);
 }
 
+/* ------------------------------------------------------------------ payload */
+
+// Every member a package can carry, in the order the page packs them. app.js
+// packs from this table and scripts/kit.mjs writes it into the release kit's
+// kit.json, so Burrow builds the package the page builds. The order is part of
+// the format: the tar layer is reproducible only if it is followed.
+//
+// A member comes from one of three places:
+//   asset  staged into public/assets/ by build-assets.sh from `src`, and
+//          shipped in the kit. `id` is its key in assets/manifest.json.
+//   fetch  taken (`take`, by basename) out of an upstream tarball at build time:
+//          Tailscale or MediaMTX. Never shipped by this repo.
+//   input  what the user supplies: their SSH key, and build.conf.
+// `option` is the payload option it belongs to (null: every package carries
+// it). An asset not `required` is left out, with a note, when it is missing.
+export const PACKAGE = [
+  { id: 'update', option: null, asset: 'update', src: 'installer/update', member: './update', mode: 0o755, required: true },
+  { id: 'probe', option: null, asset: 'probe.sh', src: 'installer/probe.sh', member: './probe.sh', mode: 0o755, required: true },
+  { id: 'authorizedKeys', option: 'ssh', input: 'ssh-key', member: './authorized_keys', mode: 0o600, required: true },
+  { id: 'buildConf', option: null, input: 'build.conf', member: './build.conf', mode: 0o644, required: true },
+
+  { id: 'tailscaled', option: 'tailscale', fetch: 'tailscale', take: 'tailscaled', member: './userdata/tailscale/tailscaled', mode: 0o755, required: true },
+  { id: 'tailscale', option: 'tailscale', fetch: 'tailscale', take: 'tailscale', member: './userdata/tailscale/tailscale', mode: 0o755, required: true },
+  { id: 'bdts', option: 'tailscale', label: 'bdts', asset: 'bdts-linux-arm64', src: 'tailscale-ui/dist/bdts-linux-arm64', member: './userdata/bd-tailscale-ui/bdts', mode: 0o755 },
+
+  { id: 'bdkvm', option: 'kvm', label: 'bdkvm', asset: 'bdkvm-linux-arm64', src: 'agent/dist/bdkvm-linux-arm64', member: './userdata/birddog-kvm/bdkvm', mode: 0o755, required: true },
+  { id: 'kvmRun', option: 'kvm', asset: 'kvm-run.sh', src: 'installer/kvm-run.sh', member: './userdata/birddog-kvm/run.sh', mode: 0o755, required: true },
+
+  { id: 'bdcam', option: 'uvc', label: 'bdcam', asset: 'bdcam-linux-arm64', src: 'converter/dist/bdcam-linux-arm64', member: './userdata/bd-cam/bdcam', mode: 0o755, required: true },
+  { id: 'camRun', option: 'uvc', asset: 'cam-run.sh', src: 'installer/cam-run.sh', member: './userdata/bd-cam/run.sh', mode: 0o755, required: true },
+  { id: 'camApiRun', option: 'uvc', asset: 'cam-api-run.sh', src: 'installer/cam-api-run.sh', member: './userdata/bd-cam/api-run.sh', mode: 0o755, required: true },
+
+  { id: 'bdplay', option: 'player', label: 'bdplay', asset: 'bdplay-linux-arm64', src: 'player/dist/bdplay-linux-arm64', member: './userdata/bd-play/bdplay', mode: 0o755, required: true },
+  { id: 'bdpdf', option: 'player', label: 'bdpdf', asset: 'bdpdf-linux-arm64', src: 'player/dist/bdpdf-linux-arm64', member: './userdata/bd-play/bdpdf', mode: 0o755 },
+  { id: 'pdfium', option: 'player', label: 'libpdfium.so', asset: 'libpdfium.so', src: 'player/dist/libpdfium.so', member: './userdata/bd-play/libpdfium.so', mode: 0o755 },
+  { id: 'exfat', option: 'player', label: 'exFAT helper', asset: 'mount.exfat-fuse', src: 'player/dist/mount.exfat-fuse-linux-arm64', member: './userdata/bd-play/mount.exfat-fuse', mode: 0o755 },
+
+  { id: 'mediamtx', option: 'gateway', fetch: 'mediamtx', take: 'mediamtx', member: './userdata/bd-gw/mediamtx', mode: 0o755, required: true },
+  { id: 'mediamtxLicense', option: 'gateway', fetch: 'mediamtx', take: 'LICENSE', member: './userdata/bd-gw/LICENSE.mediamtx', mode: 0o644 },
+  { id: 'bdgw', option: 'gateway', label: 'bdgw', asset: 'bdgw-linux-arm64', src: 'gateway/dist/bdgw-linux-arm64', member: './userdata/bd-gw/bdgw', mode: 0o755, required: true },
+  { id: 'gwRun', option: 'gateway', asset: 'gw-run.sh', src: 'installer/gw-run.sh', member: './userdata/bd-gw/run.sh', mode: 0o755, required: true },
+  { id: 'gwApiRun', option: 'gateway', asset: 'gw-api-run.sh', src: 'installer/gw-api-run.sh', member: './userdata/bd-gw/api-run.sh', mode: 0o755, required: true },
+];
+
+/** PACKAGE by id. */
+export const PART = Object.fromEntries(PACKAGE.map((p) => [p.id, p]));
+
+// The payload options, in pack order, with the build.conf flags they set. SSH
+// has no flag: the installer installs a key when ./authorized_keys is there.
+// `uiFlag` is the option's birdUI tab. Tailscale's is not the user's choice (the
+// panel ships whenever bdts is in the build); the other two are, defaulting on.
+// Modules come last, after every option, under MODULE_PREFIX.
+export const OPTIONS = [
+  { id: 'ssh', label: 'SSH', flag: null, default: true },
+  { id: 'tailscale', label: 'Tailscale', flag: 'WITH_TAILSCALE', uiFlag: 'WITH_TAILSCALE_UI', uiChoice: false, default: true },
+  { id: 'kvm', label: 'NDI KVM endpoint', flag: 'WITH_KVM', default: false },
+  { id: 'uvc', label: 'UVC converter', flag: 'WITH_CAM', uiFlag: 'WITH_CAM_UI', uiChoice: true, default: false },
+  { id: 'player', label: 'USB media player', flag: 'WITH_PLAY', default: false },
+  { id: 'gateway', label: 'Streaming gateway', flag: 'WITH_GATEWAY', uiFlag: 'WITH_GATEWAY_UI', uiChoice: true, default: false },
+];
+
+/** The members one option adds, in pack order. */
+export const partsOf = (option) => PACKAGE.filter((p) => p.option === option);
+
+// build.conf is sourced by the installer as root, so the tag is cut down to
+// characters that cannot do anything in a shell before it goes in.
+export const TAG_DEFAULT = 'web';
+export const TAG_UNSAFE_RE = /[^A-Za-z0-9._-]/g;
+export const cleanTag = (raw) => ((raw || '').trim() || TAG_DEFAULT).replace(TAG_UNSAFE_RE, '-');
+export const packageName = (tag) => `BirdDog_PLAY-custom-${tag}.fw`;
+
 export function buildConf({
   tag, withTailscale, withTailscaleUi, withKvm, withPlay, withCam, withCamUi,
   withGateway, withGatewayUi, withModules, doReboot,

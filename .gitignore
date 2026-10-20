@@ -8,3 +8,6 @@ test/out/
 node_modules/
 .wrangler/
 .DS_Store
+
+# The release kit, built by scripts/make-kit.sh
+kit/out/

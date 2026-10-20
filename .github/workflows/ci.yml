@@ -35,6 +35,11 @@ jobs:
       - name: Read module archives written by the system tar
         run: node test/modules.mjs
 
+      # The release kit Burrow builds packages from. Rebuilds the package above
+      # from kit.json alone and requires the same tar, byte for byte.
+      - name: Build the release kit and check it against the package
+        run: node test/kit.mjs
+
       # public/fw.js agreeing with itself proves nothing — GNU tar and Python's
       # strict tarfile are the independent readers.
       - name: GNU tar must accept the package
