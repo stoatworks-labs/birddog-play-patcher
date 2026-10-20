@@ -2,11 +2,11 @@
 # Build the release kit: birddog-play-patcher-kit-<version>.zip.
 #
 # The page serves its installer scripts and module binaries from its own
-# origin, so nothing outside a browser can fetch them. The kit is those files
-# as one release asset, plus kit.json (where each goes in a .fw, which option
-# needs it, the upstream pins) and the licence notices. Burrow builds packages
-# from it. Tailscale and MediaMTX are never in it: whoever builds a package
-# fetches them, as the page does.
+# origin, so nothing outside a browser can fetch them. The kit is public/assets/
+# as one release asset (under assets/), the licence notices (NOTICES/) and
+# kit.json, the upstream pins and module rules. Burrow builds packages from it
+# the way public/app.js does. Tailscale and MediaMTX are never in it: whoever
+# builds a package fetches them, as the page does.
 #
 #   scripts/make-kit.sh [outdir]     # default kit/out, which is gitignored
 #

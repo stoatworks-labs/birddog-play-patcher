@@ -1,9 +1,9 @@
 # BirdDog PLAY Patcher kit: notices
 
 This kit holds the files the [BirdDog PLAY Patcher](https://birddog-play-patcher.stoatworks-labs.com)
-page packs into a `.fw` package: the installer scripts and the on-device programs. `kit.json`
-says where each one goes. [Burrow](https://github.com/stoatworks-labs/burrow) builds packages
-from it, so it doesn't have to scrape them off the page.
+page packs into a `.fw` package: `assets/` is the installer scripts and the on-device programs,
+exactly as the page serves them, with their `manifest.json`. [Burrow](https://github.com/stoatworks-labs/burrow)
+builds packages from it, so it doesn't have to scrape them off the page.
 
 Not affiliated with or endorsed by BirdDog. Installing a package built from this will not do
 your warranty any favours.
@@ -22,27 +22,27 @@ your warranty any favours.
 
 ## This repo's own files
 
-`installer/` and, in `bin/`, `bdts-linux-arm64`, `bdkvm-linux-arm64`, `bdcam-linux-arm64`,
-`bdplay-linux-arm64`, `bdpdf-linux-arm64` and `bdgw-linux-arm64` come from
+The installer scripts and, in `assets/`, `bdts-linux-arm64`, `bdkvm-linux-arm64`,
+`bdcam-linux-arm64`, `bdplay-linux-arm64`, `bdpdf-linux-arm64` and `bdgw-linux-arm64` come from
 <https://github.com/stoatworks-labs/birddog-play-patcher>, under the MIT licence in
-`licenses/birddog-play-patcher-LICENSE`. The binaries are the ones committed in that repo's
+`NOTICES/birddog-play-patcher-LICENSE`. The binaries are the ones committed in that repo's
 `*/dist/` folders at the commit `kit.json` names, and their source sits beside them:
 `tailscale-ui/`, `agent/`, `converter/`, `player/` and `gateway/`.
 
 ## PDFium
 
-`bin/libpdfium.so` is the `pdfium-linux-arm64` build from
+`assets/libpdfium.so` is the `pdfium-linux-arm64` build from
 [bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries) release
 `chromium/7999`, redistributed unmodified. PDFium is BSD-3-Clause, © The PDFium Authors.
-`licenses/pdfium/` is the licence directory from that release: `pdfium.txt` is PDFium's own
+`NOTICES/pdfium/` is the licence directory from that release: `pdfium.txt` is PDFium's own
 licence, the other files are the libraries compiled into it, and `LICENSE` is the build's MIT
 licence, © Benoit Blanchon.
 
 ## fuse-exfat and libfuse
 
-`bin/mount.exfat-fuse` is [fuse-exfat](https://github.com/relan/exfat) 1.3.0 (GPL v2,
+`assets/mount.exfat-fuse` is [fuse-exfat](https://github.com/relan/exfat) 1.3.0 (GPL v2,
 © Andrew Nayenko) statically linked against [libfuse](https://github.com/libfuse/libfuse) 2.9.9
-(LGPL v2.1). The licences are `licenses/fuse-exfat-COPYING` and `licenses/libfuse-COPYING.LIB`.
+(LGPL v2.1). The licences are `NOTICES/fuse-exfat-COPYING` and `NOTICES/libfuse-COPYING.LIB`.
 
 Both are copyleft, so their corresponding source is offered. Each is built unmodified from the
 upstream release tarball by

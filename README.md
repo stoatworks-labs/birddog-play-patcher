@@ -204,12 +204,13 @@ the **system** tar (GNU tar in CI, bsdtar on a Mac), so the module reader is che
 what actual tar programs emit (pax headers, GNU long names, ustar prefixes) rather than against
 `fw.js` marking its own homework.
 
-Each release carries `birddog-play-patcher-kit-<version>.zip`: the installer and the module
-binaries the page packs, their licence notices, and `kit.json`, which says where each file goes
-in a package. [Burrow](https://github.com/stoatworks-labs/burrow) builds packages from it.
-[`kit/README.md`](kit/README.md) has the format. Where each member goes lives in one table,
-`PACKAGE` in `fw.js`, which the page packs from too, and `test/kit.mjs` rebuilds the test
-package from `kit.json` alone and requires the same tar, byte for byte.
+Each release carries `birddog-play-patcher-kit-<version>.zip`: the page's `public/assets/`
+(installer, module binaries and their `manifest.json`), their licence notices, and a `kit.json`
+with the MediaMTX and Tailscale pins. [Burrow](https://github.com/stoatworks-labs/burrow) builds
+packages from it the way `app.js` does. [`kit/README.md`](kit/README.md) has the format. Where
+each member goes lives in one table, `PACKAGE` in `fw.js`, which `app.js` packs from, and
+`test/kit.mjs` packs the test package again from the kit and requires the same tar, byte for
+byte.
 
 **The tar layer is reproducible; the `.fw` isn't.** Identical inputs produce a byte-identical
 tar in both Chrome and Node, but the two engines configure zlib differently, so the same tar

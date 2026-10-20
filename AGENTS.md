@@ -104,12 +104,17 @@ authors is `public/modules.html`; the reference implementation of an author's si
   `gateway/render.go` (CI fails if not) and `MEDIAMTX_VERSION` in birddog-re's `build.sh`
   (private, so nothing checks it) — the gateway's rendered configuration is only validated
   against that one release.
-- **Member paths live in `PACKAGE` in `fw.js`, not in `app.js`.** The release kit's `kit.json`
-  is written from the same table, and Burrow builds packages from that, so a path or mode typed
-  into `app.js` would make the page and Burrow build different packages. `test/kit.mjs` fails if
-  `app.js` names a member path or asset of its own, packs out of table order, or if a package
-  built from `kit.json` alone isn't byte-identical to `test/build-package.mjs`'s. That test file
-  keeps its own hand-written paths on purpose, as the independent copy; change both.
+- **Member paths live in `PACKAGE` in `fw.js`, not in `app.js`.** Burrow ports that table to
+  pack from the release kit's `assets/`, so a path or mode typed into `app.js` would make the page
+  and Burrow build different packages. Changing the table changes Burrow's packages too: tell the
+  Burrow side. `test/kit.mjs` fails if `app.js` names a member path or asset of its own, packs out
+  of table order, or if a package packed from the kit's `assets/` by the table isn't
+  byte-identical to `test/build-package.mjs`'s. That test file keeps its own hand-written paths on
+  purpose, as the independent copy; change both.
+- **The kit's shape is Burrow's contract:** `kit.json`, `assets/` (public/assets/ as
+  build-assets.sh writes it, minus `support-footer-version.js`) and `NOTICES/`. `kit.json` has
+  exactly the keys in `kit/README.md`, every value read from `src/worker.js` or `fw.js`. Add a key
+  or a file only with Burrow in step.
 - **The kit never carries Tailscale, MediaMTX, mutool, a vendor `.fw` or a key.** `test/kit.mjs`
   checks the first three by name and the vendor payload by content. It carries the licence
   notices and source offer the page shows; `kit/licenses/pdfium/` is the licence directory of

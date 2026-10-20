@@ -123,7 +123,11 @@ unarchived, with a "moved" notice at the top of their READMEs.
 **Release kit for Burrow, 2026-10-20 (v0.3.0, the first tagged release).** Burrow v0.5.0 builds
 PLAY packages natively, and can only download from GitHub. The page's assets are served from
 its own origin, so `scripts/make-kit.sh` now packs them as `birddog-play-patcher-kit-<v>.zip`
-with a `kit.json` (format in `kit/README.md`), released locally with `gh release create`.
+(format in `kit/README.md`), released locally with `gh release create`.
+- The first kit, published as v0.3.0's asset, had a `kit.json` describing every member. The
+  Burrow session asked the same day for `public/assets/` as-is under `assets/`, with
+  `NOTICES/` and a small `kit.json` of pins, because Burrow ports `app.js`'s packing instead.
+  That is the shape now.
 - The member table moved out of `app.js` into `PACKAGE`/`OPTIONS` in `fw.js`, so the page and the
   kit read one copy. Checked in Chrome: the old and new page built byte-identical `.fw` files
   for KVM + UVC + player (`03e8c7d1…`) and for every option with local Tailscale 1.104.1 and
