@@ -38,6 +38,7 @@ player/          bdplay, the USB media player — Go source, the PDFium/exFAT he
                  scripts, and dist/ (the binaries the page serves; mutool never)
 converter/       bdcam, the UVC converter — Go source and dist/
 gateway/         bdgw, the streaming gateway panel — Go source and dist/
+omt/             bdomt, the OMT receiver — Go source, the libvmx patch and build, and dist/
 tailscale-ui/    bdts, the birdUI Tailscale panel — Go source and dist/
 module-template/ a working third-party module; CI proves fw.js accepts it
 test/            builds a package in Node using public/fw.js; modules.mjs reads archives

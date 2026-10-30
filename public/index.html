@@ -190,6 +190,47 @@
           fetched here at build time and checked against its published SHA-256.</div>
       </div>
     </div>
+    <div class="opt" id="omtRow">
+      <input type="checkbox" id="optOmt">
+      <div>
+        <div class="t">OMT receiver <span class="beta">beta</span></div>
+        <div class="d">Shows an <a href="https://github.com/openmediatransport">Open Media Transport</a>
+          source on the HDMI output, with its sound. OMT is the open-source video-over-IP protocol
+          that came out of vMix, and the PLAY's own decoder has never heard of it. Pick a
+          source from the ones announcing themselves on the network, or type
+          <code>host:port</code> for one on another subnet, and press <strong>SHOW ON HDMI</strong>.
+          <br>
+          The receiver speaks the OMT 1.0 wire protocol itself and decodes its VMX video with
+          the codec's reference library, patched to write the one pixel format the PLAY's
+          display path accepts. Like the USB media player it <strong>takes the display</strong>:
+          the PLAY's decoder is stopped while a source is shown, so NDI, the OSD and tally are
+          gone until you press <strong>STOP</strong>, at which point it's started again. A
+          source that was on air comes back after a reboot.
+          <br>
+          <strong>Why beta:</strong> it has <strong>not yet run on a PLAY</strong>. It has
+          received a real OMT sender at 1080p60 off the device, and its GStreamer pipelines run
+          under the PLAY's own GStreamer version, but whether four Cortex-A53s decode 1080p60
+          VMX in time is the question only the hardware can answer. 720p is the safer bet until
+          then. Interlaced sources aren't supported, and the sound isn't lined up with the
+          picture (it runs a little late).
+          <br>
+          The API is on port 8094 and every change is gated on your birdUI login. Adds about
+          7.5 MB.
+          <br>
+          <label style="display:block;margin-top:6px;">
+            <input type="checkbox" id="optOmtUi" checked>
+            Add the <strong>OMT</strong> tab to the web UI, beside the UVC Converter and Streaming
+            tabs. Same edit of <code>videoset.html</code>, marker-wrapped and backed up;
+            <code>bdomt --unpatch-ui</code> restores it, and the installer restarts
+            <code>BirdDogWebUI</code>, checks it came back as a new process, and rolls back if it
+            didn't. Without this the receiver still runs; you'd drive it on port 8094.
+          </label>
+        </div>
+        <div class="src">Source: <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/omt">omt/</a> in this repo (MIT) — Go;
+          VMX decoding by <a href="https://github.com/openmediatransport/libvmx">openmediatransport/libvmx</a>
+          (MIT) plus one patch, built from source in the same folder.</div>
+      </div>
+    </div>
     <div class="opt">
       <input type="checkbox" id="optReboot">
       <div>
@@ -277,6 +318,11 @@
      <code>/userdata/bd-gw/bdgw --unpatch-ui &amp;&amp; systemctl restart BirdDogWebUI</code>,
      <code>systemctl disable --now bd-mtx bd-gw</code>, and
      <code>rm -rf /userdata/bd-gw /etc/systemd/system/bd-{mtx,gw}.service</code>.</p>
+  <p class="note">The OMT receiver: press <strong>STOP</strong> on its tab first, so the PLAY's
+     decoder is started again, then
+     <code>/userdata/bd-omt/bdomt --unpatch-ui &amp;&amp; systemctl restart BirdDogWebUI</code>,
+     <code>systemctl disable --now bd-omt</code>, and
+     <code>rm -rf /userdata/bd-omt /etc/systemd/system/bd-omt.service</code>.</p>
   <p class="note">A custom module built from the template leaves its own
      <code>uninstall</code> beside its payload: <code>bash /userdata/bd-&lt;name&gt;/uninstall</code>.
      One without it is whatever its author documented — <code>/userdata/bd-modules.log</code>
@@ -293,7 +339,7 @@
        <code>pkgs.tailscale.com</code> and, for the streaming gateway, GitHub's release downloads
        of MediaMTX — neither serves a CORS header.</p>
     <p><strong>Read the installer before you run it.</strong> It runs as root on your device and
-       it is 500 lines of commented bash — you should not take anyone's word for what it does:
+       it is about 750 lines of commented bash — you should not take anyone's word for what it does:
        <a href="https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/installer/update">installer/update</a>.
        Source for the whole tool is at
        <a href="https://github.com/stoatworks-labs/birddog-play-patcher">github.com/stoatworks-labs/birddog-play-patcher</a>
@@ -304,9 +350,11 @@
        the UVC converter in
        <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/converter">converter/</a>,
        the birdUI Tailscale panel in
-       <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/tailscale-ui">tailscale-ui/</a>
-       and the streaming gateway in
-       <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/gateway">gateway/</a>.
+       <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/tailscale-ui">tailscale-ui/</a>,
+       the streaming gateway in
+       <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/gateway">gateway/</a>
+       and the OMT receiver in
+       <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/omt">omt/</a>.
        Want to add your own? <a href="modules.html">Building a module</a> explains the format the
        installer runs, and
        <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/module-template">module-template/</a>
@@ -322,6 +370,13 @@
        under the <a href="https://github.com/bluenviron/mediamtx/blob/main/LICENSE">MIT
        licence</a>, © its authors; its LICENSE file travels in the package as
        <code>/userdata/bd-gw/LICENSE.mediamtx</code>.</p>
+    <p>Choosing the OMT receiver redistributes
+       <a href="https://github.com/openmediatransport/libvmx">libvmx</a>, built from a pinned
+       upstream commit with one patch (it adds an NV12 output; the patch and the build script are
+       in <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/omt/vmx">omt/vmx/</a>),
+       under the <a href="https://github.com/openmediatransport/libvmx/blob/main/LICENSE.txt">MIT
+       licence</a>, © Open Media Transport Contributors; the licence travels in the package as
+       <code>/userdata/bd-omt/LICENSE.libvmx</code>.</p>
     <p>Choosing the USB media player also redistributes two more unmodified upstream binaries.
        <a href="https://pdfium.googlesource.com/pdfium/">PDFium</a> renders PDF pages, under the
        <a href="https://pdfium.googlesource.com/pdfium/+/refs/heads/main/LICENSE">BSD-3-Clause

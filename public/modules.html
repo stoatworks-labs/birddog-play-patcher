@@ -70,7 +70,8 @@ payload/             whatever install copies to /userdata/bd-&lt;name&gt;/
     <tr><th>Key</th><th>Rule</th><th>Used for</th></tr>
     <tr><td><code>NAME</code></td>
         <td>required; 1–32 characters of <code>a-z 0-9 -</code>, starting with a letter or digit.
-            Not one of <code>tailscale tailscale-ui kvm cam cam-api play probe modules</code>,
+            Not one of <code>tailscale tailscale-ui kvm cam cam-api play probe modules gateway gw
+            mtx omt</code>,
             which the generator's own payloads use.</td>
         <td><code>modules/&lt;NAME&gt;/</code> in the package; by convention
             <code>/userdata/bd-&lt;NAME&gt;</code> and <code>bd-&lt;NAME&gt;.service</code> on the
@@ -152,7 +153,9 @@ payload/             whatever install copies to /userdata/bd-&lt;name&gt;/
         <code>bd_log</code> and <code>journalctl</code>, not a failed firmware install.</li>
     <li><strong>Pick a port nobody has.</strong> 80 and 8080 are BirdDog's (and 8080 has no
         authentication of any kind), 8090 <code>bd-cam-api</code>, 8091 <code>bd-play</code>,
-        8092 <code>bd-tailscale-ui</code>, 9031 sshd. A collision is silent: the second service
+        8092 <code>bd-tailscale-ui</code>, 8093 <code>bd-gw</code>, 8094 <code>bd-omt</code>,
+        9031 sshd, and the streaming gateway's MediaMTX holds 1935, 8554, 8888, 8889 and 8890.
+        A collision is silent: the second service
         fails to bind and its page never answers.</li>
     <li><strong>Supervise yourself.</strong> A unit with <code>Restart=always</code> and a
         program that exits 0 when it has nothing to do (no device attached, say) is a hotplug

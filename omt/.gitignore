@@ -1,0 +1,7 @@
+# dist/ is COMMITTED here: the patcher ships bdomt and libvmx.so from omt/dist/.
+
+# libvmx's source, fetched at the pinned commit by vmx/build-libvmx.sh, and its
+# host and check builds. Only the patch is ours to keep.
+vmx/.src/
+vmx/.build/
+vmx/.build-nv12check-linux-arm64

@@ -22,7 +22,7 @@ VERSION="$(sed -n 's/^VERSION=//p' module.conf | head -1 | tr -d "\"'")"
 if [[ "$NAME" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]]; then ok "NAME=$NAME"
 else bad "NAME='$NAME' — needs 1–32 of a-z 0-9 -, starting with a letter or digit"; fi
 case "$NAME" in
-  tailscale|tailscale-ui|kvm|cam|cam-api|play|probe|modules)
+  tailscale|tailscale-ui|kvm|cam|cam-api|play|probe|modules|gateway|gw|mtx|omt)
     bad "NAME='$NAME' is a payload the patcher already ships" ;;
 esac
 if [[ "$VERSION" =~ ^[A-Za-z0-9][A-Za-z0-9._+-]{0,31}$ ]]; then ok "VERSION=$VERSION"

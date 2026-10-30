@@ -1,11 +1,12 @@
 # BirdDog PLAY Patcher user guide
 
 BirdDog PLAY Patcher builds an installable `.fw` for a [BirdDog PLAY](https://birddog.tv) that
-adds **an SSH key, Tailscale, an NDI KVM endpoint, a USB media player, a UVC converter and a
-streaming gateway**, plus **modules of your own**. With those, a PLAY can be reached and managed
-remotely, drive the machine it's displaying, play video, stills and PDFs off a USB stick, turn a
-USB camera into an NDI, SRT or HDMI source, and take RTMP, RTSP, HLS, WebRTC and UDP streams onto
-its screen and send that camera back out the same ways.
+adds **an SSH key, Tailscale, an NDI KVM endpoint, a USB media player, a UVC converter, a
+streaming gateway and an OMT receiver**, plus **modules of your own**. With those, a PLAY can be
+reached and managed remotely, drive the machine it's displaying, play video, stills and PDFs off a
+USB stick, turn a USB camera into an NDI, SRT or HDMI source, take RTMP, RTSP, HLS, WebRTC and UDP
+streams onto its screen and send that camera back out the same ways, and show Open Media
+Transport sources.
 
 **The package is put together entirely in your browser.** Nothing is uploaded, you don't need an
 account, and **you don't need your existing firmware file** either: the generated package is a
@@ -67,7 +68,7 @@ downloads for the streaming gateway's pinned MediaMTX.
 
 **This project contains no BirdDog firmware, no vendor keys, and no way to decrypt one.**
 
-> **Read the installer before you run it.** It's over 600 lines of commented bash, it runs as root
+> **Read the installer before you run it.** It's over 700 lines of commented bash, it runs as root
 > on your device, and you shouldn't take anyone's word for what it does.
 
 ---
@@ -83,6 +84,7 @@ downloads for the streaming gateway's pinned MediaMTX.
 | `/userdata/bd-play/` | the USB media player, PDF renderer and exFAT helper | expected |
 | `/userdata/bd-cam/` | the UVC converter and its settings API | expected |
 | `/userdata/bd-gw/` | the streaming gateway: MediaMTX, its panel and its settings | expected |
+| `/userdata/bd-omt/` | the OMT receiver, its codec and its settings | expected |
 | `/userdata/bd-<name>/` | each custom module, by convention | expected |
 | `/etc/systemd/system/bd-*.service` | units | yes |
 | `/userdata/bd-probe.txt` | first-boot hardware report | yes |
@@ -97,8 +99,9 @@ downloads for the streaming gateway's pinned MediaMTX.
   bad install can't break the boot chain**;
 - is idempotent, and doesn't reboot unless you ask it to.
 
-Three options edit one web UI page, `videoset.html`, to add themselves to it: the media player's
-**USB** source, the converter's **UVC Converter** tab and the gateway's **Streaming** tab. Each
+Four options edit one web UI page, `videoset.html`, to add themselves to it: the media player's
+**USB** source, the converter's **UVC Converter** tab, the gateway's **Streaming** tab and the OMT
+receiver's **OMT** tab. Each
 edit is marker-wrapped, backed up beside the file and exactly reversible. Afterwards the installer
 restarts the web UI, checks it came back as a new process and answers, and rolls the edit back if
 it didn't. The Tailscale panel does the same to the System page.
@@ -203,6 +206,27 @@ YouTube refuses video without audio, and the converter hasn't got any yet.
 
 ---
 
+## OMT receiver (beta)
+
+This shows an [Open Media Transport](https://github.com/openmediatransport) source on the HDMI
+output, with its sound. OMT is the open video-over-IP protocol that came out of vMix, and the
+PLAY's own decoder doesn't speak it. Open the **OMT** tab in the web UI, pick a source from the ones
+announcing themselves on the network (or type `host:port` for one on another subnet), and press
+**SHOW ON HDMI**. The same controls are on `http://<play-ip>:8094/`, behind your birdUI login.
+
+Like the USB media player, it **takes the display**: the PLAY's decoder is stopped while a source
+is shown, so NDI, the OSD and tally are gone until you press **STOP**, which starts it again. A
+source that was showing comes back after a power cut.
+
+**Why beta:** it **hasn't run on a PLAY yet**. Off the device it has received a real OMT sender at
+1080p60 and its pipelines have run under the PLAY's GStreamer version, but whether the PLAY keeps
+up with 1080p60 is modelled, not measured, so **720p is the safer bet** for now. Interlaced sources
+are refused and the sound runs a little late. Its own
+[user guide](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/omt/docs/USER-GUIDE.md)
+has the settings and what to do when it won't show.
+
+---
+
 ## Custom modules
 
 Under **Custom modules** you can add your own payloads. A module is a small `.tgz` holding a
@@ -232,7 +256,8 @@ and read *Building a module* on the site. A module built from the template can b
 ## Undoing it
 
 Over SSH, run the lines for each option you installed, in this order. For the gateway, clear
-**Show on HDMI** in its tab first so the decoder is handed back.
+**Show on HDMI** in its tab first so the decoder is handed back, and for the OMT receiver press
+**STOP** on its tab.
 
 ```
 # USB media player
@@ -245,6 +270,9 @@ systemctl disable --now bd-cam bd-cam-api
 # streaming gateway
 systemctl disable --now bd-mtx bd-gw
 /userdata/bd-gw/bdgw --unpatch-ui
+# OMT receiver
+systemctl disable --now bd-omt
+/userdata/bd-omt/bdomt --unpatch-ui
 # Tailscale and its System page panel
 systemctl disable --now bd-tailscale-ui bd-tailscaled
 /userdata/bd-tailscale-ui/bdts --unpatch-ui
@@ -252,16 +280,17 @@ systemctl disable --now bd-tailscale-ui bd-tailscaled
 systemctl disable --now bd-kvm
 # then, whatever you installed
 systemctl restart BirdDogWebUI
-rm -rf /userdata/tailscale /userdata/bd-{tailscale-ui,kvm,play,cam,gw} \
-  /etc/systemd/system/bd-{tailscaled,tailscale-ui,kvm,play,cam,cam-api,mtx,gw}.service \
+rm -rf /userdata/tailscale /userdata/bd-{tailscale-ui,kvm,play,cam,gw,omt} \
+  /etc/systemd/system/bd-{tailscaled,tailscale-ui,kvm,play,cam,cam-api,mtx,gw,omt}.service \
   /userdata/bd-probe.txt /userdata/bd-modules.log /srv/birddog-web-ui/static/bd-probe.txt
 ```
 
 Each service stops before its page edit comes out, because the player puts its **USB** entry
 back every time it starts. The player goes first because its unpatch puts back the whole page as
-it found it, which can include the converter's and the gateway's tabs; theirs take out only their
-own. Copies of each page as it was found stay beside them in `/srv/birddog-web-ui/` as
-`settings.html.bdts-stock`, `videoset.html.bdcam-orig` and `videoset.html.bdgw-stock`. Your key
+it found it, which can include the converter's, the gateway's and the OMT receiver's tabs; theirs
+take out only their own. Copies of each page as it was found stay beside them in
+`/srv/birddog-web-ui/` as `settings.html.bdts-stock`, `videoset.html.bdcam-orig`,
+`videoset.html.bdgw-stock` and `videoset.html.bdomt-stock`. Your key
 stays in `/root/.ssh/authorized_keys`, and a module built from the template leaves
 `bash /userdata/bd-<name>/uninstall`.
 

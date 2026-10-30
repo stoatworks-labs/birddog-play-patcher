@@ -109,6 +109,7 @@ jobs:
           - { dir: converter, bin: bdcam }
           - { dir: gateway, bin: bdgw, tab: web/streaming.js, placeholder: __BDGW_API_PORT__, port: "8093" }
           - { dir: tailscale-ui, bin: bdts, tab: web/bdts-tailscale.js, placeholder: __BDTS_API_PORT__, port: "8092" }
+          - { dir: omt, bin: bdomt, tab: web/omt.js, placeholder: __BDOMT_API_PORT__, port: "8094", libvmx: true }
     defaults:
       run:
         working-directory: ${{ matrix.dir }}
@@ -121,6 +122,13 @@ jobs:
           # go.mod, not go.sum: gateway/ and tailscale-ui/ have no dependencies
           # and so no go.sum.
           cache-dependency-path: ${{ matrix.dir }}/go.mod
+
+      # omt/'s decoding tests need this runner's own build of the patched
+      # libvmx (fetched at the pinned commit, patched, compiled); without it
+      # they skip rather than fail, and a skip proves nothing.
+      - name: build the patched libvmx for the tests
+        if: matrix.libvmx
+        run: vmx/build-libvmx.sh host
 
       - name: vet
         run: go vet ./...

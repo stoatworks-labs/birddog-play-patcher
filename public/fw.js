@@ -315,7 +315,7 @@ export const MODULE_VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,31}$/;
 // Names whose /userdata/bd-<name> or unit would collide with a built-in payload.
 export const RESERVED_MODULE_NAMES = new Set([
   'tailscale', 'tailscale-ui', 'kvm', 'cam', 'cam-api', 'play', 'probe', 'modules',
-  'gateway', 'gw', 'mtx',
+  'gateway', 'gw', 'mtx', 'omt',
 ]);
 // The updater extracts the whole package into a temp dir on the device before
 // running anything. 68 MB of Tailscale is proven; this is a ceiling, not a budget.
@@ -519,6 +519,10 @@ export const PACKAGE = [
   { id: 'bdgw', option: 'gateway', label: 'bdgw', asset: 'bdgw-linux-arm64', src: 'gateway/dist/bdgw-linux-arm64', member: './userdata/bd-gw/bdgw', mode: 0o755, required: true },
   { id: 'gwRun', option: 'gateway', asset: 'gw-run.sh', src: 'installer/gw-run.sh', member: './userdata/bd-gw/run.sh', mode: 0o755, required: true },
   { id: 'gwApiRun', option: 'gateway', asset: 'gw-api-run.sh', src: 'installer/gw-api-run.sh', member: './userdata/bd-gw/api-run.sh', mode: 0o755, required: true },
+
+  { id: 'bdomt', option: 'omt', label: 'bdomt', asset: 'bdomt-linux-arm64', src: 'omt/dist/bdomt-linux-arm64', member: './userdata/bd-omt/bdomt', mode: 0o755, required: true },
+  { id: 'libvmx', option: 'omt', label: 'libvmx.so', asset: 'libvmx.so', src: 'omt/dist/libvmx.so', member: './userdata/bd-omt/libvmx.so', mode: 0o755, required: true },
+  { id: 'libvmxLicense', option: 'omt', asset: 'LICENSE.libvmx', src: 'omt/vmx/LICENSE.libvmx', member: './userdata/bd-omt/LICENSE.libvmx', mode: 0o644, required: true },
 ];
 
 /** PACKAGE by id. */
@@ -536,6 +540,7 @@ export const OPTIONS = [
   { id: 'uvc', label: 'UVC converter', flag: 'WITH_CAM', uiFlag: 'WITH_CAM_UI', uiChoice: true, default: false },
   { id: 'player', label: 'USB media player', flag: 'WITH_PLAY', default: false },
   { id: 'gateway', label: 'Streaming gateway', flag: 'WITH_GATEWAY', uiFlag: 'WITH_GATEWAY_UI', uiChoice: true, default: false },
+  { id: 'omt', label: 'OMT receiver', flag: 'WITH_OMT', uiFlag: 'WITH_OMT_UI', uiChoice: true, default: false },
 ];
 
 /** The members one option adds, in pack order. */
@@ -550,7 +555,7 @@ export const packageName = (tag) => `BirdDog_PLAY-custom-${tag}.fw`;
 
 export function buildConf({
   tag, withTailscale, withTailscaleUi, withKvm, withPlay, withCam, withCamUi,
-  withGateway, withGatewayUi, withModules, doReboot,
+  withGateway, withGatewayUi, withOmt, withOmtUi, withModules, doReboot,
 }) {
   return (
     `BUILD_TAG=${tag}\n` +
@@ -562,6 +567,8 @@ export function buildConf({
     `WITH_CAM_UI=${withCam && withCamUi ? 1 : 0}\n` +
     `WITH_GATEWAY=${withGateway ? 1 : 0}\n` +
     `WITH_GATEWAY_UI=${withGateway && withGatewayUi ? 1 : 0}\n` +
+    `WITH_OMT=${withOmt ? 1 : 0}\n` +
+    `WITH_OMT_UI=${withOmt && withOmtUi ? 1 : 0}\n` +
     `WITH_MODULES=${withModules ? 1 : 0}\n` +
     `DO_REBOOT=${doReboot ? 1 : 0}\n`
   );

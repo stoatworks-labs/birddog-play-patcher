@@ -20,6 +20,8 @@ player/build.sh                  # rebuild bdplay into player/dist/ (CGO_ENABLED
 converter/build.sh               # rebuild bdcam into converter/dist/ (needs zig, glibc 2.28 pin)
 gateway/build.sh                 # vet, test, check the tab script, rebuild bdgw into gateway/dist/
 tailscale-ui/build.sh            # vet, test, check the panel script, rebuild bdts into tailscale-ui/dist/
+omt/vmx/build-libvmx.sh [host]   # the patched libvmx: omt/dist/libvmx.so (zig), or a host copy for the tests
+omt/build.sh                     # vet, test, check the tab script, rebuild bdomt into omt/dist/ (zig, glibc 2.28)
 module-template/build.sh && node module-template/scripts/patcher-accepts.mjs module-template/dist/*.tgz
 ```
 

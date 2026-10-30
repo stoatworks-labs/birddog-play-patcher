@@ -1,0 +1,112 @@
+diff --git a/src/vmxcodec.cpp b/src/vmxcodec.cpp
+index e5e1361..f15cad9 100644
+--- a/src/vmxcodec.cpp
++++ b/src/vmxcodec.cpp
+@@ -591,6 +591,39 @@ VMX_API void VMX_DecodePlane16(VMX_INSTANCE* instance, VMX_PLANE* pPlane, VMX_SL
+ }
+ }
+ 
++static void VMX_PlanarToNV12(BYTE* ysrc, int ystride, BYTE* usrc, int ustride, BYTE* vsrc, int vstride,
++	BYTE* dstY, int dstStrideY, BYTE* dstUV, int dstStrideUV, VMX_SIZE size)
++{
++	int cw = size.width >> 1;
++	for (int r = 0; r < size.height; r++)
++	{
++		memcpy(dstY + r * dstStrideY, ysrc + r * ystride, size.width);
++	}
++	for (int r = 0; r < size.height; r += 2)
++	{
++		BYTE* u0 = usrc + r * ustride;
++		BYTE* v0 = vsrc + r * vstride;
++		// An odd last row has no partner below it, so it stands alone.
++		BYTE* u1 = (r + 1 < size.height) ? u0 + ustride : u0;
++		BYTE* v1 = (r + 1 < size.height) ? v0 + vstride : v0;
++		BYTE* d = dstUV + (r >> 1) * dstStrideUV;
++		int x = 0;
++#if defined(ARM64)
++		for (; x + 16 <= cw; x += 16)
++		{
++			uint8x16x2_t uv = { { vrhaddq_u8(vld1q_u8(u0 + x), vld1q_u8(u1 + x)),
++				vrhaddq_u8(vld1q_u8(v0 + x), vld1q_u8(v1 + x)) } };
++			vst2q_u8(d + (x << 1), uv);
++		}
++#endif
++		for (; x < cw; x++)
++		{
++			d[x << 1] = (BYTE)((u0[x] + u1[x] + 1) >> 1);
++			d[(x << 1) + 1] = (BYTE)((v0[x] + v1[x] + 1) >> 1);
++		}
++	}
++}
++
+ void VMX_DecodeSlices(VMX_INSTANCE* instance, int startIndex, int count)
+ {
+ 	VMX_PLANE y = instance->Planes[0];
+@@ -656,6 +689,22 @@ void VMX_DecodeSlices(VMX_INSTANCE* instance, int startIndex, int count)
+ 					instance->ImageData + (i * sliceStride), instance->ImageStride, s->PixelSize);
+ 			}
+ 			break;
++		case VMX_IMAGE_NV12:
++			// Slices are VMX_SLICE_HEIGHT (even) rows, so each starts on a chroma row.
++			sliceStrideU = instance->ImageStrideU * (VMX_SLICE_HEIGHT / 2);
++			for (int i = startIndex; i < (startIndex + count); i++)
++			{
++				VMX_SLICE_SET* s = instance->Slices[i];
++				VMX_DecodePlane(instance, &y, s);
++				VMX_DecodePlane(instance, &u, s);
++				VMX_DecodePlane(instance, &v, s);
++				VMX_PlanarToNV12(y.Data + s->Offset[0], y.Stride,
++					u.Data + s->Offset[1], u.Stride,
++					v.Data + s->Offset[2], v.Stride,
++					instance->ImageData + (i * sliceStride), instance->ImageStride,
++					instance->ImageDataU + (i * sliceStrideU), instance->ImageStrideU, s->PixelSize);
++			}
++			break;
+ 		case VMX_IMAGE_UYVA:
+ 			sliceStrideA = instance->ImageStrideA * VMX_SLICE_HEIGHT;
+ 			for (int i = startIndex; i < (startIndex + count); i++)
+@@ -980,6 +1029,22 @@ VMX_API VMX_ERR VMX_DecodeUYVA(VMX_INSTANCE* instance, BYTE* dst, int stride)
+ 	return VMX_ERR_OK;
+ }
+ 
++VMX_API VMX_ERR VMX_DecodeNV12(VMX_INSTANCE* instance, BYTE* dstY, int strideY, BYTE* dstUV, int strideUV)
++{
++	if (!instance) return VMX_ERR_INVALID_INSTANCE;
++	if (!dstY || !dstUV) return VMX_ERR_INVALID_PARAMETERS;
++	if (strideY < instance->Planes[0].Size.width || strideUV < instance->Planes[0].Size.width) return VMX_ERR_INVALID_PARAMETERS;
++	if (instance->Format != VMX_FORMAT_PROGRESSIVE) return VMX_ERR_INVALID_CODEC_FORMAT;
++	VMX_ResetStream(instance);
++	instance->ImageData = dstY;
++	instance->ImageStride = strideY;
++	instance->ImageDataU = dstUV;
++	instance->ImageStrideU = strideUV;
++	instance->ImageFormat = VMX_IMAGE_NV12;
++	VMX_DecodePlanes(instance);
++	return VMX_ERR_OK;
++}
++
+ VMX_API VMX_ERR VMX_DecodeYUY2(VMX_INSTANCE* instance, BYTE* dst, int stride)
+ {
+ 	if (!instance) return VMX_ERR_INVALID_INSTANCE;
+diff --git a/src/vmxcodec.h b/src/vmxcodec.h
+index 157f86f..c74ea5d 100644
+--- a/src/vmxcodec.h
++++ b/src/vmxcodec.h
+@@ -336,6 +336,17 @@ VMX_API VMX_ERR VMX_DecodeUYVA(VMX_INSTANCE* instance, BYTE* dst, int stride);
+ */
+ VMX_API VMX_ERR VMX_DecodeYUY2(VMX_INSTANCE* instance, BYTE* dst, int stride);
+ 
++/**
++* Decode to NV12: a full-resolution Y plane and a half-width, half-height interleaved CbCr
++* plane (4:2:0 semi-planar), the format display pipelines such as GStreamer's kmssink on
++* Rockchip take without conversion. VMX is 4:2:2, so each output chroma row is the rounded
++* average of two source rows. Progressive frames only.
++* @param[in] instance The instance created using VMX_Create
++* @param[in] dstY Y plane, strideY bytes per row (at least the width)
++* @param[in] dstUV CbCr plane, strideUV bytes per row (at least the width), height/2 rows
++*/
++VMX_API VMX_ERR VMX_DecodeNV12(VMX_INSTANCE* instance, BYTE* dstY, int strideY, BYTE* dstUV, int strideUV);
++
+ /**
+ * Decodes a special 1/8th preview of the compressed image
+ * 

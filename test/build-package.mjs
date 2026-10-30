@@ -114,6 +114,21 @@ for (const n of ['gateway', 'gw', 'mtx']) {
   check(RESERVED_MODULE_NAMES.has(n), `module name "${n}" is reserved for the gateway`);
 }
 
+// The OMT receiver: the same guards, and the decoder handed back by systemd
+// if bdomt is killed while it holds the display — but only then.
+check(/WITH_OMT="\$\{WITH_OMT:-0\}"/.test(updateSrc), 'installer defaults WITH_OMT to 0');
+check(/if \[ "\$WITH_OMT" = 1 \] && \[ -d "\$SDIR\/userdata\/bd-omt" \]/.test(updateSrc),
+  'installer guards the OMT block on both the flag and the directory');
+check(/if \[ "\$\{OMT_INSTALLED:-0\}" = 1 \] && \[ "\$WITH_OMT_UI" = 1 \]/.test(updateSrc),
+  'installer only patches the OMT tab when the receiver was installed');
+check(/bdomt --unpatch-ui --ui-dir \/srv\/birddog-web-ui/.test(updateSrc),
+  'installer rolls the OMT tab back with bdomt --unpatch-ui');
+check(/ExecStopPost=.*\/run\/bdomt-took-display.*systemctl --no-block start BirdDogRunner/.test(updateSrc),
+  'bd-omt.service restarts BirdDogRunner after a kill, keyed on bdomt\'s marker');
+check(/ExecStart=\/userdata\/bd-omt\/bdomt --serve :8094 --dir \/userdata\/bd-omt/.test(updateSrc),
+  'bd-omt serves on 8094, the port the tab is patched with');
+check(RESERVED_MODULE_NAMES.has('omt'), 'module name "omt" is reserved for the OMT receiver');
+
 async function tailscaleTarball() {
   if (process.env.TS_TGZ) {
     console.log(`\ntailscale: using ${process.env.TS_TGZ}`);
@@ -159,7 +174,7 @@ tar.text('./build.conf',
   buildConf({
     tag: 'citest', withTailscale: true, withTailscaleUi: true, withKvm: true,
     withPlay: true, withCam: true, withCamUi: true, withGateway: true, withGatewayUi: true,
-    withModules: true, doReboot: false,
+    withOmt: true, withOmtUi: true, withModules: true, doReboot: false,
   }), 0o644);
 
 const bins = await extractTailscale(await tailscaleTarball());
@@ -226,6 +241,21 @@ for (const [asset, dest] of [['gw-run.sh', './userdata/bd-gw/run.sh'], ['gw-api-
   tar.file(dest, new Uint8Array(data), 0o755);
 }
 
+// The OMT receiver: bdomt, the patched libvmx and libvmx's MIT notice.
+for (const [asset, dest, mode] of [
+  ['bdomt-linux-arm64', './userdata/bd-omt/bdomt', 0o755],
+  ['libvmx.so', './userdata/bd-omt/libvmx.so', 0o755],
+  ['LICENSE.libvmx', './userdata/bd-omt/LICENSE.libvmx', 0o644],
+]) {
+  const data = new Uint8Array(await readFile(join(ASSETS, asset)));
+  if (mode === 0o755) check(isArm64Elf(data), `${asset} is an aarch64 ELF`);
+  else check(/MIT License/.test(new TextDecoder().decode(data)), 'LICENSE.libvmx is libvmx\'s MIT licence');
+  tar.file(dest, data, mode);
+}
+const bdomtBin = await readFile(join(ASSETS, 'bdomt-linux-arm64'));
+check(bdomtBin.includes('VMX_DecodeNV12'), 'bdomt looks for the patched libvmx\'s VMX_DecodeNV12');
+check((await readFile(join(ASSETS, 'libvmx.so'))).includes('VMX_DecodeNV12'), 'libvmx.so is the patched build (exports VMX_DecodeNV12)');
+
 // A third-party module, packed by the SYSTEM tar from test/fixtures/module —
 // GNU tar in CI, bsdtar on a Mac — so readModule is exercised against a real
 // tar program's output rather than against fw.js writing for itself.
@@ -265,6 +295,7 @@ for (const n of [
   './modules/citest-mod/payload/hello.txt',
   './userdata/bd-gw/mediamtx', './userdata/bd-gw/bdgw', './userdata/bd-gw/run.sh',
   './userdata/bd-gw/api-run.sh', './userdata/bd-gw/LICENSE.mediamtx',
+  './userdata/bd-omt/bdomt', './userdata/bd-omt/libvmx.so', './userdata/bd-omt/LICENSE.libvmx',
 ]) {
   check(byName.has(n), `contains ${n}`);
 }
@@ -325,6 +356,15 @@ check(/^WITH_GATEWAY_UI=0$/m.test(gwOnly) && /^WITH_GATEWAY=0$/m.test(gwOnly),
 // a packaged one would overwrite them on every reinstall.
 check(!members.some((m) => /bd-gw\/config\.json$/.test(m.name)),
   'package carries no gateway config.json');
+
+// The OMT tab is served by bdomt; the same rule.
+check(!/^WITH_OMT_UI=1$/m.test(conf) || /^WITH_OMT=1$/m.test(conf),
+  'build.conf never ships the OMT tab without the receiver');
+const omtOnly = buildConf({ tag: 't', withOmt: false, withOmtUi: true, doReboot: false });
+check(/^WITH_OMT_UI=0$/m.test(omtOnly) && /^WITH_OMT=0$/m.test(omtOnly),
+  'buildConf refuses the OMT tab when the receiver is off');
+check(!members.some((m) => /bd-omt\/config\.json$/.test(m.name)),
+  'package carries no OMT config.json');
 
 // The modules flag and directory travel together, in both directions.
 check(/^WITH_MODULES=1$/m.test(conf) === members.some((m) => m.name.startsWith('./modules/')),
