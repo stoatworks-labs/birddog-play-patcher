@@ -40,6 +40,16 @@ Not vendored and not bundled in the repo. The official static linux/arm64 releas
 
 It is the protocol hub the streaming gateway is built on — RTMP, RTSP, HLS, WebRTC, SRT and UDP in and out, remuxing rather than transcoding — so the PLAY gains every one of those endpoints without a streaming stack of its own, and the picture can still go through the device's own decoder over SRT on loopback.
 
+### libvmx
+
+<https://github.com/openmediatransport/libvmx>  
+Licence: MIT  
+Copyright: Open Media Transport Contributors (Copyright (c) 2025)
+
+Not vendored. The repo carries the upstream commit it is pinned to and one patch, which adds a decode straight to NV12 (VMX_DecodeNV12). The build fetches the source at that commit, applies the patch and cross-compiles it for the PLAY, and the resulting libvmx.so is committed and placed inside the package the user downloads, beside the receiver that loads it, with libvmx's LICENSE file next to it as LICENSE.libvmx. That is a binary redistribution of modified code, so the MIT notice travels with it.
+
+Open Media Transport's video is VMX, and libvmx is that codec's reference library. The OMT receiver loads it at run time and decodes each frame straight to NV12, the one layout the PLAY's display sink accepts, so the receiver needs no codec of its own.
+
 ### purego
 
 <https://github.com/ebitengine/purego>  
@@ -63,6 +73,17 @@ Build tooling, test runners and the libraries the front ends are assembled from.
 The full transitive dependency set for any build is pinned in this repo's lockfile,
 which is the authoritative list. What is named above is the layers a reader would
 want to know about, not every package that has ever been resolved.
+
+## Work we checked ourselves against
+
+No code was taken from these — but they were how we knew we had it right, and that is worth saying out loud.
+
+### libomtnet — Open Media Transport Contributors
+
+<https://github.com/openmediatransport/libomtnet>  
+Licence: MIT
+
+The OMT receiver in omt/, its framing and its mDNS querier are Go written against libomtnet's source, the protocol's reference implementation, read at the commit pinned in omt/vmx/UPSTREAM. The frame layout, the size limits and the control messages follow it exactly, the `Program==` typo included, because senders compare those messages as strings. No code is copied, and nothing of libomtnet is built or shipped here.
 
 ## Getting this wrong
 
