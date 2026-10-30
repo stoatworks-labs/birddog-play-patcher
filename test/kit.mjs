@@ -155,8 +155,8 @@ for (const [key, meta] of Object.entries(manifest)) {
 for (const p of PACKAGE.filter((x) => x.asset)) check(p.id in manifest, `manifest.json has ${p.id}`);
 for (const rel of manifest.rootfsOverlay || []) check(inKit.includes(`files/${rel}`), `rootfs overlay files/${rel}`);
 const modeOf = new Map(entries.map((e) => [e.name, e.mode & 0o777]));
-check(PACKAGE.filter((p) => p.asset).every((p) => modeOf.get(`assets/${p.asset}`) === 0o755),
-  'every installer script and binary is 0755 in the zip');
+check(PACKAGE.filter((p) => p.asset).every((p) => modeOf.get(`assets/${p.asset}`) === p.mode),
+  'every asset has its package mode in the zip (0755 for scripts and binaries)');
 
 /* ------------------------------------------------------------------ notices */
 

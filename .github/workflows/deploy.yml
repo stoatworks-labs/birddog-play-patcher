@@ -11,7 +11,7 @@
 # `npm test` is what builds public/assets/ — build-assets.sh runs first in that
 # script — so there is no separate build step. Those assets are gitignored and
 # assembled from the committed binaries in agent/dist, player/dist,
-# converter/dist, gateway/dist and tailscale-ui/dist; if one is missing the
+# converter/dist, gateway/dist, omt/dist and tailscale-ui/dist; if one is missing the
 # script exits non-zero and this job stops before anything reaches the edge.
 #
 # Deliberately the same shape as the rest of the fleet's deploy.yml, so a fix to
@@ -39,12 +39,16 @@ on:
       - "!converter/**"
       - "!gateway/**"
       - "!tailscale-ui/**"
+      - "!omt/**"
       - "!module-template/**"
       - "agent/dist/**"
       - "player/dist/**"
       - "converter/dist/**"
       - "gateway/dist/**"
       - "tailscale-ui/dist/**"
+      - "omt/dist/**"
+      # libvmx's licence is staged as an asset too: it goes in the package.
+      - "omt/vmx/LICENSE.libvmx"
   workflow_dispatch:
 
 # Newest push wins. Cancelling an in-flight build is safe: wrangler uploads the

@@ -105,7 +105,7 @@ What nothing enforces, and what keeps a unit recoverable:
   and still exit 0 — that is a problem for `journalctl`, not a failed firmware
   install.
 - **Pick a port nobody has.** 80 and 8080 are BirdDog's, 8090 `bd-cam-api`,
-  8091 `bd-play`, 8092 `bd-tailscale-ui`, 8093 `bd-gw`, 9031 sshd, and the
+  8091 `bd-play`, 8092 `bd-tailscale-ui`, 8093 `bd-gw`, 8094 `bd-omt`, 9031 sshd, and the
   streaming gateway's MediaMTX holds 1935, 8554, 8888, 8889 and 8890 (the
   [gateway's README](https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/gateway#ports)
   has the full list). A collision is silent:

@@ -111,9 +111,9 @@ unarchived, with a "moved" notice at the top of their READMEs.
   in player/, converter/, gateway/, tailscale-ui/), the CORS/serve scaffolding (`serve.go`, and
   `api.go` in player/) and near-identical `build.sh` files. Now they share a repo that could be one internal package,
   but each patch.go is unit-tested against its own page and markers — extract with care.
-- **Follow-up, not done:** `module-template/check.sh` and `module.conf` still list the reserved
+- **Follow-up, done 2026-10-30:** `module-template/check.sh` and `module.conf` listed the reserved
   names without `gateway gw mtx`, which `RESERVED_MODULE_NAMES` in fw.js and birddog-re's
-  `build.sh` both refuse.
+  `build.sh` both refuse. They carry those and `omt` now.
 - Their own `.github/` went (funding, issue templates, workflows), except
   `module-template/.github/workflows/ci.yml`: it is part of the template, for the author's own
   repo once they copy the folder out, and GitHub never runs a workflow below the root here.
@@ -139,5 +139,21 @@ its own origin, so `scripts/make-kit.sh` now packs them as `birddog-play-patcher
 - **Not fixed, follow-up:** `RESERVED_MODULE_NAMES` lacks `tailscaled`, and the template names
   its unit `bd-<NAME>.service`, so a module called `tailscaled` would overwrite the Tailscale
   daemon's unit. birddog-re's list needs the same change.
+
+**OMT receiver added 2026-10-30 (beta, NOT run on a PLAY).** `omt/` is bdomt, a native OMT 1.0
+receiver that takes the display the bdplay way and decodes VMX with libvmx plus one patch
+(`VMX_DecodeNV12`). It came out of the 2026-10-26 feasibility spike; the design and the modelled
+A53 figures are in `omt/docs/NOTES.md`.
+- **Three new `PACKAGE` members** under the `omt` option (`WITH_OMT`, with `WITH_OMT_UI` for the
+  tab): `bdomt-linux-arm64`, `libvmx.so` and `LICENSE.libvmx`, all to `/userdata/bd-omt/`. Burrow
+  ports `app.js`'s packing, so it needs telling when these tables change.
+- **libvmx is built from source, not committed as source:** `omt/vmx/` holds the upstream pin,
+  the patch and `build-libvmx.sh`. CI builds a host copy (clang, as upstream's own scripts do)
+  so the decode tests run instead of skipping.
+- The installer block lives upstream in birddog-re's fwbuild payload like every other, and
+  `sync-from-re.sh` brought it here. It pulled `agent/go.mod`/`go.sum` backwards again (purego
+  0.11.0 against Dependabot's 0.11.1 here), so those were put back by hand.
+- `deploy.yml` re-includes `omt/dist/**` and `omt/vmx/LICENSE.libvmx`, since both are assets.
+- The page's installer line now says about 750 lines; it had said 500 since before the gateway.
 
 Related: [compressionstream gzip engine variance](https://github.com/stoatworks-labs/fleet-notes/blob/main/notes/reference_compressionstream_gzip_engine_variance.md), **release workflow** (working-practice note, kept in Claude memory).

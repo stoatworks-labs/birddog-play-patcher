@@ -23,11 +23,21 @@ your warranty any favours.
 ## This repo's own files
 
 The installer scripts and, in `assets/`, `bdts-linux-arm64`, `bdkvm-linux-arm64`,
-`bdcam-linux-arm64`, `bdplay-linux-arm64`, `bdpdf-linux-arm64` and `bdgw-linux-arm64` come from
+`bdcam-linux-arm64`, `bdplay-linux-arm64`, `bdpdf-linux-arm64`, `bdgw-linux-arm64` and
+`bdomt-linux-arm64` come from
 <https://github.com/stoatworks-labs/birddog-play-patcher>, under the MIT licence in
 `NOTICES/birddog-play-patcher-LICENSE`. The binaries are the ones committed in that repo's
 `*/dist/` folders at the commit `kit.json` names, and their source sits beside them:
-`tailscale-ui/`, `agent/`, `converter/`, `player/` and `gateway/`.
+`tailscale-ui/`, `agent/`, `converter/`, `player/`, `gateway/` and `omt/`.
+
+## libvmx
+
+`assets/libvmx.so` is [libvmx](https://github.com/openmediatransport/libvmx), the VMX codec
+Open Media Transport uses, built from the upstream commit named in
+[omt/vmx/UPSTREAM](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/omt/vmx/UPSTREAM)
+with one patch (an NV12 output, `omt/vmx/libvmx-decode-nv12.patch`) by `omt/vmx/build-libvmx.sh`.
+MIT, © Open Media Transport Contributors. The licence is `assets/LICENSE.libvmx`, and the page
+packs it beside the library as `/userdata/bd-omt/LICENSE.libvmx`.
 
 ## PDFium
 

@@ -11,11 +11,11 @@
 This builds an installable `.fw` for a [BirdDog PLAY](https://birddog.tv) that adds an SSH key,
 [Tailscale](https://tailscale.com), an NDI KVM endpoint, a
 [USB media player](player/), a
-[UVC converter](converter/) and a
-[streaming gateway](gateway/). With those, a PLAY can be reached and managed remotely, drive the
-machine it's displaying, play video, stills and PDFs off a USB stick, turn a USB camera into NDI,
-and take RTMP, RTSP, HLS, WebRTC and UDP streams onto its HDMI output and send that camera back
-out the same ways. Not bad for a little box whose day job is decoding NDI to HDMI. It also takes
+[UVC converter](converter/), a
+[streaming gateway](gateway/) and an [OMT receiver](omt/). With those, a PLAY can be reached and
+managed remotely, drive the machine it's displaying, play video, stills and PDFs off a USB stick,
+turn a USB camera into NDI, take RTMP, RTSP, HLS, WebRTC and UDP streams onto its HDMI output and
+send that camera back out the same ways, and show Open Media Transport sources too. Not bad for a little box whose day job is decoding NDI to HDMI. It also takes
 **modules of your own**: a `.tgz` with an `install` script that the package's installer runs on
 the device alongside those payloads (see [Custom modules](#custom-modules)).
 
@@ -73,6 +73,8 @@ It only ships code written for this project.
 | `/etc/systemd/system/bd-{cam,cam-api}.service` | converter units | yes |
 | `/userdata/bd-gw/` | streaming gateway (beta): `mediamtx` 62 MB, `bdgw`, its `config.json` | expected, but not guaranteed |
 | `/etc/systemd/system/bd-{mtx,gw}.service` | gateway units | yes |
+| `/userdata/bd-omt/` | OMT receiver (beta): `bdomt`, `libvmx.so`, its `config.json` | expected, but not guaranteed |
+| `/etc/systemd/system/bd-omt.service` | OMT receiver unit | yes |
 | `/userdata/bd-probe.txt` | first-boot hardware report | yes |
 | `/userdata/bd-modules.log` | one line per custom module the installer ran | yes |
 
@@ -85,7 +87,7 @@ Everything substantial lives on the `/userdata` partition. The installer:
   bad install can't break the boot chain;
 - is idempotent, and doesn't reboot unless you ask it to.
 
-Read [`installer/update`](installer/update) before you run it. It's over 600 lines of commented
+Read [`installer/update`](installer/update) before you run it. It's over 700 lines of commented
 bash, it runs as root on your device, and you shouldn't take anyone's word for what it does,
 mine included.
 
@@ -144,9 +146,29 @@ three together.
 credentials, just like the stock API on `:8080`. Read [`gateway/README.md`](gateway/README.md) for the ceilings (H.264
 to 1080p60/2160p30, HEVC to 2160p60; WebRTC must send H.264) and the hardware list.
 
+## OMT receiver (beta)
+
+The OMT receiver ([`omt/`](omt/), bdomt) shows an
+[Open Media Transport](https://github.com/openmediatransport) source on the HDMI output, with its
+sound, from an **OMT** tab in the web UI (or the API on port 8094, behind your birdUI login). The
+PLAY's decoder can't be pointed at OMT, so this one **takes the display** the way the USB media
+player does: `BirdDogRunner` is stopped while a source is shown and started again on **STOP**, and
+a marker in `/run` gets systemd to start it again if `bdomt` is killed outright.
+
+It speaks the OMT 1.0 wire protocol itself, in Go, and finds senders with its own mDNS querier,
+because stock libomt needs Avahi and the PLAY doesn't run it. The video is decoded by
+[libvmx](https://github.com/openmediatransport/libvmx), the codec's reference library, built from
+a pinned commit with one patch that makes it write NV12, the only format the PLAY's display
+plane takes. The page ships that build, and its MIT licence travels with it.
+
+**Not yet run on a PLAY.** It has received a real sender off the device and its pipelines have run
+under the PLAY's GStreamer version, but 1080p60 decode on four A53s is modelled, not measured, so
+720p is the safer bet for now. Interlaced sources are refused and the sound runs a little late.
+[`omt/README.md`](omt/README.md) has the details and the hardware list.
+
 ## Custom modules
 
-The five payloads above are modules in all but packaging, and the generator takes yours too.
+The six payloads above are modules in all but packaging, and the generator takes yours too.
 A **module** is a directory (`module.conf` with `NAME` and `VERSION`, an executable `install`,
 and whatever payload it needs) shipped as a `.tgz`. Choose it under *Custom modules*. The page
 reads it in the browser, checks its structure and writes it into the `.fw` at
@@ -192,9 +214,11 @@ page serves. Build, test on a unit, then commit the binary:
 | [`converter/`](converter/) | bdcam, the UVC converter (its `build.sh` needs zig) | [`converter/README.md`](converter/README.md) |
 | [`gateway/`](gateway/) | bdgw, the streaming gateway panel | [`gateway/README.md`](gateway/README.md) |
 | [`tailscale-ui/`](tailscale-ui/) | bdts, the birdUI Tailscale panel | [`tailscale-ui/docs/USER-GUIDE.md`](tailscale-ui/docs/USER-GUIDE.md) |
+| [`omt/`](omt/) | bdomt, the OMT receiver, and the libvmx patch (both builds need zig) | [`omt/docs/USER-GUIDE.md`](omt/docs/USER-GUIDE.md) |
 | [`module-template/`](module-template/) | a working third-party module to start from | [`module-template/README.md`](module-template/README.md) |
 
-Until 2026-10-11 the last five were separate repositories; their history came with them.
+Until 2026-10-11 the player, converter, gateway, Tailscale panel and template were separate
+repositories; their history came with them.
 
 `public/fw.js` holds the archive logic and has no DOM or network calls in it, on purpose, so
 the Node test exercises the same module the browser runs rather than a reimplementation. The
@@ -225,7 +249,7 @@ that recovery restores *factory* state, not the unit's provisioned serial, hostn
 
 To remove everything this installs, SSH in and run the lines for each option you installed, in
 this order. If the streaming gateway is on HDMI, clear **Show on HDMI** on its tab first so the
-decoder is handed back.
+decoder is handed back, and if the OMT receiver is showing a source, press **STOP** on its tab.
 
 ```bash
 # USB media player
@@ -238,6 +262,9 @@ systemctl disable --now bd-cam bd-cam-api
 # streaming gateway
 systemctl disable --now bd-mtx bd-gw
 /userdata/bd-gw/bdgw --unpatch-ui
+# OMT receiver
+systemctl disable --now bd-omt
+/userdata/bd-omt/bdomt --unpatch-ui
 # Tailscale and its System page panel
 systemctl disable --now bd-tailscale-ui bd-tailscaled
 /userdata/bd-tailscale-ui/bdts --unpatch-ui
@@ -245,17 +272,17 @@ systemctl disable --now bd-tailscale-ui bd-tailscaled
 systemctl disable --now bd-kvm
 # then, whatever you installed
 systemctl restart BirdDogWebUI
-rm -rf /userdata/tailscale /userdata/bd-{tailscale-ui,kvm,play,cam,gw} \
-  /etc/systemd/system/bd-{tailscaled,tailscale-ui,kvm,play,cam,cam-api,mtx,gw}.service \
+rm -rf /userdata/tailscale /userdata/bd-{tailscale-ui,kvm,play,cam,gw,omt} \
+  /etc/systemd/system/bd-{tailscaled,tailscale-ui,kvm,play,cam,cam-api,mtx,gw,omt}.service \
   /userdata/bd-probe.txt /userdata/bd-modules.log /srv/birddog-web-ui/static/bd-probe.txt
 ```
 
 Each service stops before its page edit comes out, because the player puts its **USB** entry
 back every time it starts. The player goes first because its unpatch puts back the whole page as
-it found it, which can include the converter's and the gateway's tabs; theirs take out only
-their own. That leaves your key in `/root/.ssh/authorized_keys`, the copies of each page as it
-was found (`settings.html.bdts-stock`, `videoset.html.bdcam-orig` and `videoset.html.bdgw-stock`
-in `/srv/birddog-web-ui/`), and any custom modules. A module built from the template removes
+it found it, which can include the converter's, the gateway's and the OMT receiver's tabs;
+theirs take out only their own. That leaves your key in `/root/.ssh/authorized_keys`, the copies
+of each page as it was found (`settings.html.bdts-stock`, `videoset.html.bdcam-orig`,
+`videoset.html.bdgw-stock` and `videoset.html.bdomt-stock` in `/srv/birddog-web-ui/`), and any custom modules. A module built from the template removes
 itself with `bash /userdata/bd-<name>/uninstall`.
 
 <!-- attributions:start -->

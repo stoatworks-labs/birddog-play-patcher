@@ -214,6 +214,7 @@ firmware packager fetches it, and its BSD-3 notice obligation is carried there.
 | 8091 | `bd-play` — bdplay's USB media player |
 | **8092** | **`bd-tailscale-ui` — this** |
 | 8093 | `bd-gw` — the streaming gateway's Streaming tab |
+| 8094 | `bd-omt` — the OMT receiver's OMT tab |
 | 1935, 8554, 8888, 8889, 8890/udp | the streaming gateway's MediaMTX (full list in [`gateway/README.md`](../gateway/README.md#ports)) |
 
 8092 was picked to avoid the three that were already taken; 8091 in particular is bdplay's

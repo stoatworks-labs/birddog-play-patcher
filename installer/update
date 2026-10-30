@@ -31,6 +31,8 @@ WITH_CAM_UI="${WITH_CAM_UI:-0}"
 WITH_PLAY="${WITH_PLAY:-0}"
 WITH_GATEWAY="${WITH_GATEWAY:-0}"
 WITH_GATEWAY_UI="${WITH_GATEWAY_UI:-0}"
+WITH_OMT="${WITH_OMT:-0}"
+WITH_OMT_UI="${WITH_OMT_UI:-0}"
 WITH_MODULES="${WITH_MODULES:-0}"
 DO_REBOOT="${DO_REBOOT:-0}"
 
@@ -486,6 +488,93 @@ if [ "${GW_INSTALLED:-0}" = 1 ] && [ "$WITH_GATEWAY_UI" = 1 ] && [ -x /userdata/
   fi
 fi
 
+# ------------------------------------------------------------ OMT receiver
+# bdomt puts an Open Media Transport source on HDMI: OMT received natively,
+# its VMX video decoded by a patched libvmx straight to NV12, and shown with
+# kmssink, its sound on HDMI audio. Like bdplay it takes the display by
+# stopping BirdDogRunner and starts it again whenever it lets go; nothing on
+# the recovery path is touched. Source: omt/ in
+# github.com/stoatworks-labs/birddog-play-patcher.
+if [ "$WITH_OMT" = 1 ] && [ -d "$SDIR/userdata/bd-omt" ]; then
+  NEED_KB=$(du -sk "$SDIR/userdata/bd-omt" | awk '{print $1}')
+  if [ -n "$FREE_KB" ] && [ "$FREE_KB" -lt $((NEED_KB + 20480)) ]; then
+    log "SKIPPING the OMT receiver: needs ${NEED_KB} KB + 20 MB headroom, only ${FREE_KB} KB free"
+  else
+    log "installing the OMT receiver (${NEED_KB} KB) to /userdata/bd-omt"
+    mkdir -p /userdata/bd-omt
+    cp -f "$SDIR/userdata/bd-omt/bdomt"     /userdata/bd-omt/
+    cp -f "$SDIR/userdata/bd-omt/libvmx.so" /userdata/bd-omt/
+    chmod 755 /userdata/bd-omt/bdomt /userdata/bd-omt/libvmx.so
+    # libvmx is MIT; its notice travels with the binary.
+    [ -f "$SDIR/userdata/bd-omt/LICENSE.libvmx" ] && cp -f "$SDIR/userdata/bd-omt/LICENSE.libvmx" /userdata/bd-omt/
+    chown -R root:root /userdata/bd-omt
+    # config.json is never shipped: bdomt writes the defaults on first start,
+    # and an existing one survives a reinstall.
+
+    # 8094 because 8080 is BirdDog's API, 8090 bd-cam-api, 8091 bd-play, 8092
+    # bd-tailscale-ui and 8093 bd-gw.
+    cat > /etc/systemd/system/bd-omt.service <<'EOF'
+[Unit]
+Description=BirdDog PLAY OMT receiver (custom)
+After=network-online.target BirdDogWebUI.service
+Wants=network-online.target
+# Deliberately NOT After/Requires BirdDogRunner: bdomt stops and starts that
+# unit itself when it takes the display, and a dependency would make systemd
+# fight it.
+
+[Service]
+Type=simple
+WorkingDirectory=/userdata/bd-omt
+ExecStart=/userdata/bd-omt/bdomt --serve :8094 --dir /userdata/bd-omt
+# bdomt gives HDMI back on every exit it sees. The one it cannot see is being
+# killed, so while it holds the display /run/bdomt-took-display exists, and
+# this puts the PLAY's decoder back if the marker is still there afterwards.
+# Without the marker it would fight anyone who stopped BirdDogRunner on purpose.
+ExecStopPost=-/bin/sh -c 'if [ -e /run/bdomt-took-display ]; then rm -f /run/bdomt-took-display; systemctl --no-block start BirdDogRunner; fi'
+Restart=always
+RestartSec=5
+# Room to stop the pipelines and restart BirdDogRunner on the way out.
+TimeoutStopSec=30
+KillSignal=SIGTERM
+Nice=-10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    log "OMT receiver unit written (bd-omt)"
+    OMT_INSTALLED=1
+  fi
+fi
+
+# ------------------------------------------------------- web UI "OMT" tab
+# videoset.html once more, with bdomt's own markers and the anchors bdcam and
+# bdgw use, so the three tabs sit side by side in any order. The patch is unit
+# tested in the patcher's omt/; the health check and rollback are the same.
+if [ "${OMT_INSTALLED:-0}" = 1 ] && [ "$WITH_OMT_UI" = 1 ] && [ -x /userdata/bd-omt/bdomt ]; then
+  WEBUI_UNIT=BirdDogWebUI
+  if ! systemctl cat "$WEBUI_UNIT" >/dev/null 2>&1; then
+    log "WARNING: no $WEBUI_UNIT unit on this firmware — skipping the OMT tab"
+  elif /userdata/bd-omt/bdomt --patch-ui --ui-dir /srv/birddog-web-ui --api-port 8094 >> /tmp/bd-custom-install.log 2>&1; then
+    PID_BEFORE=$(pidof birddog-web-ui 2>/dev/null | awk '{print $1}')
+    log "AV Setup page patched; restarting $WEBUI_UNIT (was pid ${PID_BEFORE:-none})"
+    systemctl restart "$WEBUI_UNIT" 2>/dev/null
+    sleep 5
+    PID_AFTER=$(pidof birddog-web-ui 2>/dev/null | awk '{print $1}')
+    CODE=$(curl -s -o /dev/null -m 8 -w '%{http_code}' http://127.0.0.1/login 2>/dev/null || echo 000)
+    if [ -n "$PID_AFTER" ] && [ "$PID_AFTER" != "$PID_BEFORE" ] && { [ "$CODE" = 200 ] || [ "$CODE" = 302 ] || [ "$CODE" = 301 ]; }; then
+      log "web UI healthy after patch (pid ${PID_BEFORE:-none} -> $PID_AFTER, HTTP $CODE) — OMT tab is live"
+    else
+      log "WARNING: web UI unhealthy after patching (pid ${PID_BEFORE:-none} -> ${PID_AFTER:-none}, HTTP $CODE) — ROLLING BACK"
+      /userdata/bd-omt/bdomt --unpatch-ui --ui-dir /srv/birddog-web-ui >> /tmp/bd-custom-install.log 2>&1
+      systemctl restart "$WEBUI_UNIT" 2>/dev/null
+      sleep 5
+      log "after rollback: HTTP $(curl -s -o /dev/null -m 8 -w '%{http_code}' http://127.0.0.1/login 2>/dev/null || echo 000); page as found also at /srv/birddog-web-ui/videoset.html.bdomt-stock"
+    fi
+  else
+    log "WARNING: could not patch the AV Setup page — left untouched"
+  fi
+fi
+
 # -------------------------------------------------------------------- rootfs
 if [ -d "$SDIR/files" ]; then
   log "copying rootfs overlay"
@@ -600,6 +689,11 @@ if [ -f /etc/systemd/system/bd-gw.service ]; then
   systemctl restart bd-gw.service 2>/dev/null && log "bd-gw started on :8093" \
     || log "WARNING: bd-gw failed to start — check 'journalctl -u bd-gw'"
 fi
+if [ -f /etc/systemd/system/bd-omt.service ]; then
+  systemctl enable bd-omt.service 2>/dev/null
+  systemctl restart bd-omt.service 2>/dev/null && log "bd-omt started on :8094" \
+    || log "WARNING: bd-omt failed to start — check 'journalctl -u bd-omt'"
+fi
 
 # --------------------------------------------------- restore stock services
 # /bin/birddog-update-wrapper does `systemctl stop BirdDogRunner` before calling
@@ -632,6 +726,11 @@ fi
 if [ "${GW_INSTALLED:-0}" = 1 ]; then
   log "streaming gateway: publish to rtmp://<this-device>:1935/live, then pick it on the Streaming tab"
   log "  ports 1935 8554 8888 8889 8890/udp are open with no credentials — the LAN is the boundary"
+fi
+
+if [ "${OMT_INSTALLED:-0}" = 1 ]; then
+  log "OMT receiver: pick a source on the OMT tab of AV Setup (or POST to :8094/api/show)"
+  log "  showing a source stops the PLAY's own decoder until Stop is pressed"
 fi
 
 if [ "$DO_REBOOT" = 1 ]; then

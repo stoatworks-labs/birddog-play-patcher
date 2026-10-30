@@ -180,6 +180,8 @@ async function build() {
     const withCamUi = withCam && els.optCamUi.checked;
     const withGateway = els.optGateway.checked && !!manifest.bdgw;
     const withGatewayUi = withGateway && els.optGatewayUi.checked;
+    const withOmt = els.optOmt.checked && !!manifest.bdomt && !!manifest.libvmx;
+    const withOmtUi = withOmt && els.optOmtUi.checked;
     // A rejected module is never dropped silently: the user chose it, so
     // building without it would ship something other than what they asked for.
     const bad = modules.filter((m) => m.error);
@@ -207,7 +209,7 @@ async function build() {
     tar.text(PART.authorizedKeys.member, keyText + '\n', PART.authorizedKeys.mode);
     tar.text(PART.buildConf.member, buildConf({
       tag, withTailscale, withTailscaleUi, withKvm, withPlay, withCam, withCamUi,
-      withGateway, withGatewayUi, withModules, doReboot,
+      withGateway, withGatewayUi, withOmt, withOmtUi, withModules, doReboot,
     }), PART.buildConf.mode);
 
     for (const rel of manifest.rootfsOverlay || []) {
@@ -299,6 +301,19 @@ async function build() {
       log('streaming gateway: skipped');
     }
 
+    if (withOmt) {
+      log('adding the OMT receiver…');
+      const bdomt = await addVerified(tar, PART.bdomt);
+      const libvmx = await addVerified(tar, PART.libvmx);
+      await addScript(tar, PART.libvmxLicense);
+      log(`  bdomt ${humanSize(bdomt.length)} + libvmx ${humanSize(libvmx.length)}, sha256 verified`, 'ok');
+      log(withOmtUi
+        ? '  web UI tab: yes — videoset.html patched beside the other tabs, BirdDogWebUI restarted with rollback'
+        : '  web UI tab: no — control on port 8094 only');
+    } else {
+      log('OMT receiver: skipped');
+    }
+
     if (withModules) {
       log('adding custom modules — each install runs as root after the payloads above…');
       for (const { file, mod } of modules) {
@@ -344,6 +359,7 @@ async function init() {
     'key', 'tag', 'optTailscale', 'optKvm', 'optPlay', 'optReboot', 'tsFile',
     'optCam', 'optCamUi', 'camRow', 'modFiles', 'modList',
     'optGateway', 'optGatewayUi', 'gatewayRow', 'mtxFile',
+    'optOmt', 'optOmtUi', 'omtRow',
     'build', 'download', 'log', 'result', 'resultName', 'resultSize',
     'resultSha', 'kvmRow', 'playRow', 'playExtras', 'payloadInfo', 'keyHint',
   ]) {
@@ -362,6 +378,12 @@ async function init() {
       els.optGatewayUi.disabled = !els.optGateway.checked;
     });
     els.optGatewayUi.disabled = !els.optGateway.checked;
+  }
+  if (els.optOmt) {
+    els.optOmt.addEventListener('change', () => {
+      els.optOmtUi.disabled = !els.optOmt.checked;
+    });
+    els.optOmtUi.disabled = !els.optOmt.checked;
   }
   els.download.addEventListener('click', download);
   els.modFiles.addEventListener('change', modulesChosen);
@@ -403,6 +425,13 @@ async function init() {
     els.optGatewayUi.disabled = true;
     els.gatewayRow.classList.add('disabled');
     els.gatewayRow.title = 'bdgw-linux-arm64 was not present when assets were built';
+  }
+  if (!manifest.bdomt || !manifest.libvmx) {
+    els.optOmt.checked = false;
+    els.optOmt.disabled = true;
+    els.optOmtUi.disabled = true;
+    els.omtRow.classList.add('disabled');
+    els.omtRow.title = 'bdomt-linux-arm64 or libvmx.so was not present when assets were built';
   }
   if (!manifest.bdcam) {
     els.optCam.checked = false;

@@ -83,6 +83,18 @@ done
   "(run gateway/build.sh) — the streaming" \
   "gateway option will be disabled" >&2
 
+# ----------------------------------------------------------------- omt
+# The OMT receiver, bdomt, and the patched libvmx it dlopens — both built by
+# omt/'s scripts and committed in omt/dist/ — plus libvmx's MIT notice, which
+# goes in the package beside the library.
+OMT_LINE=null VMX_LINE=null
+stage_play OMT_LINE bdomt-linux-arm64 "$REPO/omt/dist/bdomt-linux-arm64" "OMT receiver"
+stage_play VMX_LINE libvmx.so         "$REPO/omt/dist/libvmx.so"         "libvmx"
+cp "$REPO/omt/vmx/LICENSE.libvmx" "$OUT/LICENSE.libvmx"
+{ [ "$OMT_LINE" = null ] || [ "$VMX_LINE" = null ]; } && echo "warning: omt/dist/bdomt-linux-arm64" \
+  "or omt/dist/libvmx.so missing (run omt/vmx/build-libvmx.sh and omt/build.sh) —" \
+  "the OMT receiver option will be disabled" >&2
+
 # --------------------------------------------------------------- bdts
 # The birdUI Tailscale panel. Ships with the Tailscale payload rather than as
 # its own option: without it a device installs Tailscale and then still needs
@@ -121,6 +133,9 @@ cat > "$OUT/manifest.json" <<EOF
   "bdgw":   $GW_LINE,
   "gwRun":    { "size": $(wc -c < "$OUT/gw-run.sh" | tr -d ' '),     "sha256": "$(sha "$OUT/gw-run.sh")" },
   "gwApiRun": { "size": $(wc -c < "$OUT/gw-api-run.sh" | tr -d ' '), "sha256": "$(sha "$OUT/gw-api-run.sh")" },
+  "bdomt":  $OMT_LINE,
+  "libvmx": $VMX_LINE,
+  "libvmxLicense": { "size": $(wc -c < "$OUT/LICENSE.libvmx" | tr -d ' '), "sha256": "$(sha "$OUT/LICENSE.libvmx")" },
   "bdplay": $PLAY_LINE,
   "bdpdf":  $PDF_LINE,
   "pdfium": $PDFLIB_LINE,
