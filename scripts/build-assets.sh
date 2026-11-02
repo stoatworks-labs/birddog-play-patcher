@@ -95,6 +95,17 @@ cp "$REPO/omt/vmx/LICENSE.libvmx" "$OUT/LICENSE.libvmx"
   "or omt/dist/libvmx.so missing (run omt/vmx/build-libvmx.sh and omt/build.sh) —" \
   "the OMT receiver option will be disabled" >&2
 
+# -------------------------------------------------------------- output
+# HDMI formats and area of interest: bdout, the service, and libbdout.so, the
+# shim preloaded into the PLAY's decoder — both built by output/build.sh and
+# committed in output/dist/.
+OUT_LINE=null SHIM_LINE=null
+stage_play OUT_LINE  bdout-linux-arm64 "$REPO/output/dist/bdout-linux-arm64" "bdout"
+stage_play SHIM_LINE libbdout.so       "$REPO/output/dist/libbdout.so"       "libbdout"
+{ [ "$OUT_LINE" = null ] || [ "$SHIM_LINE" = null ]; } && echo "warning: output/dist/bdout-linux-arm64" \
+  "or output/dist/libbdout.so missing (run output/build.sh) —" \
+  "the HDMI formats option will be disabled" >&2
+
 # --------------------------------------------------------------- bdts
 # The birdUI Tailscale panel. Ships with the Tailscale payload rather than as
 # its own option: without it a device installs Tailscale and then still needs
@@ -136,6 +147,8 @@ cat > "$OUT/manifest.json" <<EOF
   "bdomt":  $OMT_LINE,
   "libvmx": $VMX_LINE,
   "libvmxLicense": { "size": $(wc -c < "$OUT/LICENSE.libvmx" | tr -d ' '), "sha256": "$(sha "$OUT/LICENSE.libvmx")" },
+  "bdout":    $OUT_LINE,
+  "libbdout": $SHIM_LINE,
   "bdplay": $PLAY_LINE,
   "bdpdf":  $PDF_LINE,
   "pdfium": $PDFLIB_LINE,

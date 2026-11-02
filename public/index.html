@@ -231,6 +231,44 @@
           (MIT) plus one patch, built from source in the same folder.</div>
       </div>
     </div>
+    <div class="opt" id="outputRow">
+      <input type="checkbox" id="optOutput">
+      <div>
+        <div class="t">HDMI formats and area of interest <span class="beta">beta</span></div>
+        <div class="d">Lets the PLAY send the HDMI format <em>you</em> choose, rather than the one it
+          picks from the screen's list to match the stream: a standard format, any size and
+          refresh you type, or an exact modeline. And shows <strong>part of the picture</strong>
+          anywhere on the screen: one screen of a video wall, the left half of a stream, a
+          letterboxed crop in a corner.
+          <br>
+          Unlike the USB media player and the OMT receiver, it <strong>doesn't take the display</strong>. A small shim
+          preloaded into the PLAY's own decoder changes the mode list it reads and where it puts
+          each frame, so NDI, the OSD and tally all carry on. A new format is
+          <strong>tried</strong>: the decoder restarts on it and, unless you press
+          <strong>KEEP IT</strong> within 30 seconds, the last one you kept comes back on its
+          own, so a format the screen can't show doesn't leave you in the dark. The area of
+          interest takes at once, with no restart.
+          <br>
+          <strong>Why beta:</strong> it has <strong>not yet run on a PLAY</strong>. The shim has
+          run inside a stand-in for the PLAY's decoder under the PLAY's own glibc, but whether
+          the real one lets it in is the first thing the hardware will answer. The PLAY's HDMI
+          chip makes twenty pixel clocks and no others, so custom sizes are fitted to those.
+          <br>
+          The API is on port 8095 and every change is gated on your birdUI login. The installer
+          restarts the PLAY's decoder so the shim loads. Adds about 6.5 MB.
+          <br>
+          <label style="display:block;margin-top:6px;">
+            <input type="checkbox" id="optOutputUi" checked>
+            Add the <strong>Output</strong> tab to the web UI, beside the other tabs. Same edit of
+            <code>videoset.html</code>, marker-wrapped and backed up;
+            <code>bdout --unpatch-ui</code> restores it, and the installer restarts
+            <code>BirdDogWebUI</code>, checks it came back as a new process, and rolls back if it
+            didn't. Without this the shim still runs; you'd drive it on port 8095.
+          </label>
+        </div>
+        <div class="src">Source: <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/output">output/</a> in this repo (MIT) — Go, and C for the shim.</div>
+      </div>
+    </div>
     <div class="opt">
       <input type="checkbox" id="optReboot">
       <div>
@@ -323,6 +361,12 @@
      <code>/userdata/bd-omt/bdomt --unpatch-ui &amp;&amp; systemctl restart BirdDogWebUI</code>,
      <code>systemctl disable --now bd-omt</code>, and
      <code>rm -rf /userdata/bd-omt /etc/systemd/system/bd-omt.service</code>.</p>
+  <p class="note">HDMI formats and area of interest:
+     <code>/userdata/bd-out/bdout --unpatch-ui &amp;&amp; systemctl restart BirdDogWebUI</code>,
+     <code>rm /etc/systemd/system/BirdDogRunner.service.d/bd-out.conf &amp;&amp; systemctl daemon-reload</code>,
+     <code>systemctl disable --now bd-out</code>, <code>systemctl try-restart BirdDogRunner</code>
+     (so the decoder starts again without the shim), and
+     <code>rm -rf /userdata/bd-out /etc/systemd/system/bd-out.service</code>.</p>
   <p class="note">A custom module built from the template leaves its own
      <code>uninstall</code> beside its payload: <code>bash /userdata/bd-&lt;name&gt;/uninstall</code>.
      One without it is whatever its author documented — <code>/userdata/bd-modules.log</code>
@@ -339,7 +383,7 @@
        <code>pkgs.tailscale.com</code> and, for the streaming gateway, GitHub's release downloads
        of MediaMTX — neither serves a CORS header.</p>
     <p><strong>Read the installer before you run it.</strong> It runs as root on your device and
-       it is about 750 lines of commented bash — you should not take anyone's word for what it does:
+       it is about 850 lines of commented bash — you should not take anyone's word for what it does:
        <a href="https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/installer/update">installer/update</a>.
        Source for the whole tool is at
        <a href="https://github.com/stoatworks-labs/birddog-play-patcher">github.com/stoatworks-labs/birddog-play-patcher</a>
@@ -352,9 +396,11 @@
        the birdUI Tailscale panel in
        <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/tailscale-ui">tailscale-ui/</a>,
        the streaming gateway in
-       <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/gateway">gateway/</a>
-       and the OMT receiver in
-       <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/omt">omt/</a>.
+       <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/gateway">gateway/</a>,
+       the OMT receiver in
+       <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/omt">omt/</a>
+       and HDMI formats and area of interest in
+       <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/output">output/</a>.
        Want to add your own? <a href="modules.html">Building a module</a> explains the format the
        installer runs, and
        <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/module-template">module-template/</a>

@@ -75,6 +75,8 @@ It only ships code written for this project.
 | `/etc/systemd/system/bd-{mtx,gw}.service` | gateway units | yes |
 | `/userdata/bd-omt/` | OMT receiver (beta): `bdomt`, `libvmx.so`, its `config.json` | expected, but not guaranteed |
 | `/etc/systemd/system/bd-omt.service` | OMT receiver unit | yes |
+| `/userdata/bd-out/` | HDMI formats and area of interest (beta): `bdout`, the shim `libbdout.so`, its `config.json` | expected, but not guaranteed |
+| `/etc/systemd/system/bd-out.service`, `BirdDogRunner.service.d/bd-out.conf` | its unit, and the drop-in that preloads the shim into the PLAY's decoder | yes |
 | `/userdata/bd-probe.txt` | first-boot hardware report | yes |
 | `/userdata/bd-modules.log` | one line per custom module the installer ran | yes |
 
@@ -166,9 +168,28 @@ under the PLAY's GStreamer version, but 1080p60 decode on four A53s is modelled,
 720p is the safer bet for now. Interlaced sources are refused and the sound runs a little late.
 [`omt/README.md`](omt/README.md) has the details and the hardware list.
 
+## HDMI formats and area of interest (beta)
+
+HDMI formats and area of interest ([`output/`](output/), bdout) lets the PLAY send the HDMI
+format you choose instead of the one it picks to match the stream (a standard format, any size
+and refresh, or an exact modeline) and show part of the picture anywhere on the screen: one
+screen of a video wall, half a stream, a crop in a corner. It's driven from an **Output** tab in
+the web UI, or the API on port 8095, behind your birdUI login.
+
+It **doesn't take the display**. `libbdout.so`, preloaded into `PPApp` by a drop-in on
+`BirdDogRunner.service`, wraps four libdrm calls: the HDMI mode list becomes the one format
+forced, and the video plane's rectangles become the crop and the placement. NDI, the OSD and
+tally carry on. A new format is tried, and reverts in 30 seconds unless kept, because the PLAY's
+HDMI PHY makes twenty pixel clocks and no others, and a screen that can't take the result is
+dark. The area of interest takes within half a second, without a restart.
+
+**Not yet run on a PLAY.** The shim has run inside a stand-in for `PPApp` under the PLAY's glibc,
+but whether the real one lets it in is the first item on the hardware list in
+[`output/README.md`](output/README.md).
+
 ## Custom modules
 
-The six payloads above are modules in all but packaging, and the generator takes yours too.
+The seven payloads above are modules in all but packaging, and the generator takes yours too.
 A **module** is a directory (`module.conf` with `NAME` and `VERSION`, an executable `install`,
 and whatever payload it needs) shipped as a `.tgz`. Choose it under *Custom modules*. The page
 reads it in the browser, checks its structure and writes it into the `.fw` at
@@ -265,6 +286,11 @@ systemctl disable --now bd-mtx bd-gw
 # OMT receiver
 systemctl disable --now bd-omt
 /userdata/bd-omt/bdomt --unpatch-ui
+# HDMI formats and area of interest: the decoder restarts without the shim
+systemctl disable --now bd-out
+/userdata/bd-out/bdout --unpatch-ui
+rm -f /etc/systemd/system/BirdDogRunner.service.d/bd-out.conf
+systemctl daemon-reload && systemctl try-restart BirdDogRunner
 # Tailscale and its System page panel
 systemctl disable --now bd-tailscale-ui bd-tailscaled
 /userdata/bd-tailscale-ui/bdts --unpatch-ui
@@ -272,17 +298,17 @@ systemctl disable --now bd-tailscale-ui bd-tailscaled
 systemctl disable --now bd-kvm
 # then, whatever you installed
 systemctl restart BirdDogWebUI
-rm -rf /userdata/tailscale /userdata/bd-{tailscale-ui,kvm,play,cam,gw,omt} \
-  /etc/systemd/system/bd-{tailscaled,tailscale-ui,kvm,play,cam,cam-api,mtx,gw,omt}.service \
+rm -rf /userdata/tailscale /userdata/bd-{tailscale-ui,kvm,play,cam,gw,omt,out} \
+  /etc/systemd/system/bd-{tailscaled,tailscale-ui,kvm,play,cam,cam-api,mtx,gw,omt,out}.service \
   /userdata/bd-probe.txt /userdata/bd-modules.log /srv/birddog-web-ui/static/bd-probe.txt
 ```
 
 Each service stops before its page edit comes out, because the player puts its **USB** entry
 back every time it starts. The player goes first because its unpatch puts back the whole page as
-it found it, which can include the converter's, the gateway's and the OMT receiver's tabs;
-theirs take out only their own. That leaves your key in `/root/.ssh/authorized_keys`, the copies
+it found it, which can include the converter's, the gateway's, the OMT receiver's and the
+Output tabs; theirs take out only their own. That leaves your key in `/root/.ssh/authorized_keys`, the copies
 of each page as it was found (`settings.html.bdts-stock`, `videoset.html.bdcam-orig`,
-`videoset.html.bdgw-stock` and `videoset.html.bdomt-stock` in `/srv/birddog-web-ui/`), and any custom modules. A module built from the template removes
+`videoset.html.bdgw-stock`, `videoset.html.bdomt-stock` and `videoset.html.bdout-stock` in `/srv/birddog-web-ui/`), and any custom modules. A module built from the template removes
 itself with `bash /userdata/bd-<name>/uninstall`.
 
 <!-- attributions:start -->

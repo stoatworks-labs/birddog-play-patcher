@@ -23,12 +23,12 @@ your warranty any favours.
 ## This repo's own files
 
 The installer scripts and, in `assets/`, `bdts-linux-arm64`, `bdkvm-linux-arm64`,
-`bdcam-linux-arm64`, `bdplay-linux-arm64`, `bdpdf-linux-arm64`, `bdgw-linux-arm64` and
-`bdomt-linux-arm64` come from
+`bdcam-linux-arm64`, `bdplay-linux-arm64`, `bdpdf-linux-arm64`, `bdgw-linux-arm64`,
+`bdomt-linux-arm64`, `bdout-linux-arm64` and `libbdout.so` come from
 <https://github.com/stoatworks-labs/birddog-play-patcher>, under the MIT licence in
 `NOTICES/birddog-play-patcher-LICENSE`. The binaries are the ones committed in that repo's
 `*/dist/` folders at the commit `kit.json` names, and their source sits beside them:
-`tailscale-ui/`, `agent/`, `converter/`, `player/`, `gateway/` and `omt/`.
+`tailscale-ui/`, `agent/`, `converter/`, `player/`, `gateway/`, `omt/` and `output/`.
 
 ## libvmx
 

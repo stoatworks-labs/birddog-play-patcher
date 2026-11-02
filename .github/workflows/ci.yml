@@ -110,6 +110,7 @@ jobs:
           - { dir: gateway, bin: bdgw, tab: web/streaming.js, placeholder: __BDGW_API_PORT__, port: "8093" }
           - { dir: tailscale-ui, bin: bdts, tab: web/bdts-tailscale.js, placeholder: __BDTS_API_PORT__, port: "8092" }
           - { dir: omt, bin: bdomt, tab: web/omt.js, placeholder: __BDOMT_API_PORT__, port: "8094", libvmx: true }
+          - { dir: output, bin: bdout, tab: web/output.js, placeholder: __BDOUT_API_PORT__, port: "8095", shim: true }
     defaults:
       run:
         working-directory: ${{ matrix.dir }}
@@ -129,6 +130,18 @@ jobs:
       - name: build the patched libvmx for the tests
         if: matrix.libvmx
         run: vmx/build-libvmx.sh host
+
+      # output/'s shim is C, preloaded into the PLAY's decoder: its pure half
+      # tested on its own, then libbdout.so put between a stand-in for PPApp
+      # and a fake libdrm, as it is on the device. The runner's gcc here; the
+      # shipped build is zig's clang against glibc 2.28. (The Go tests below
+      # also build the shim's parser, to check every shim.conf bdout writes.)
+      - name: the shim, alone and end to end
+        if: matrix.shim
+        run: |
+          cc -std=c11 -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/core_test" shim/test/core_test.c shim/core.c
+          "$RUNNER_TEMP/core_test"
+          shim/test/run-linux.sh "$RUNNER_TEMP/shim"
 
       - name: vet
         run: go vet ./...

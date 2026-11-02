@@ -315,7 +315,7 @@ export const MODULE_VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,31}$/;
 // Names whose /userdata/bd-<name> or unit would collide with a built-in payload.
 export const RESERVED_MODULE_NAMES = new Set([
   'tailscale', 'tailscale-ui', 'kvm', 'cam', 'cam-api', 'play', 'probe', 'modules',
-  'gateway', 'gw', 'mtx', 'omt',
+  'gateway', 'gw', 'mtx', 'omt', 'output', 'out',
 ]);
 // The updater extracts the whole package into a temp dir on the device before
 // running anything. 68 MB of Tailscale is proven; this is a ceiling, not a budget.
@@ -523,6 +523,9 @@ export const PACKAGE = [
   { id: 'bdomt', option: 'omt', label: 'bdomt', asset: 'bdomt-linux-arm64', src: 'omt/dist/bdomt-linux-arm64', member: './userdata/bd-omt/bdomt', mode: 0o755, required: true },
   { id: 'libvmx', option: 'omt', label: 'libvmx.so', asset: 'libvmx.so', src: 'omt/dist/libvmx.so', member: './userdata/bd-omt/libvmx.so', mode: 0o755, required: true },
   { id: 'libvmxLicense', option: 'omt', asset: 'LICENSE.libvmx', src: 'omt/vmx/LICENSE.libvmx', member: './userdata/bd-omt/LICENSE.libvmx', mode: 0o644, required: true },
+
+  { id: 'bdout', option: 'output', label: 'bdout', asset: 'bdout-linux-arm64', src: 'output/dist/bdout-linux-arm64', member: './userdata/bd-out/bdout', mode: 0o755, required: true },
+  { id: 'libbdout', option: 'output', label: 'libbdout.so', asset: 'libbdout.so', src: 'output/dist/libbdout.so', member: './userdata/bd-out/libbdout.so', mode: 0o755, required: true },
 ];
 
 /** PACKAGE by id. */
@@ -541,6 +544,7 @@ export const OPTIONS = [
   { id: 'player', label: 'USB media player', flag: 'WITH_PLAY', default: false },
   { id: 'gateway', label: 'Streaming gateway', flag: 'WITH_GATEWAY', uiFlag: 'WITH_GATEWAY_UI', uiChoice: true, default: false },
   { id: 'omt', label: 'OMT receiver', flag: 'WITH_OMT', uiFlag: 'WITH_OMT_UI', uiChoice: true, default: false },
+  { id: 'output', label: 'HDMI formats and area of interest', flag: 'WITH_OUTPUT', uiFlag: 'WITH_OUTPUT_UI', uiChoice: true, default: false },
 ];
 
 /** The members one option adds, in pack order. */
@@ -555,7 +559,7 @@ export const packageName = (tag) => `BirdDog_PLAY-custom-${tag}.fw`;
 
 export function buildConf({
   tag, withTailscale, withTailscaleUi, withKvm, withPlay, withCam, withCamUi,
-  withGateway, withGatewayUi, withOmt, withOmtUi, withModules, doReboot,
+  withGateway, withGatewayUi, withOmt, withOmtUi, withOutput, withOutputUi, withModules, doReboot,
 }) {
   return (
     `BUILD_TAG=${tag}\n` +
@@ -569,6 +573,8 @@ export function buildConf({
     `WITH_GATEWAY_UI=${withGateway && withGatewayUi ? 1 : 0}\n` +
     `WITH_OMT=${withOmt ? 1 : 0}\n` +
     `WITH_OMT_UI=${withOmt && withOmtUi ? 1 : 0}\n` +
+    `WITH_OUTPUT=${withOutput ? 1 : 0}\n` +
+    `WITH_OUTPUT_UI=${withOutput && withOutputUi ? 1 : 0}\n` +
     `WITH_MODULES=${withModules ? 1 : 0}\n` +
     `DO_REBOOT=${doReboot ? 1 : 0}\n`
   );

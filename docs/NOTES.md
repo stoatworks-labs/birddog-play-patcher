@@ -156,4 +156,20 @@ A53 figures are in `omt/docs/NOTES.md`.
 - `deploy.yml` re-includes `omt/dist/**` and `omt/vmx/LICENSE.libvmx`, since both are assets.
 - The page's installer line now says about 750 lines; it had said 500 since before the gateway.
 
+**HDMI formats and area of interest added 2026-11-02 (beta, NOT run on a PLAY).** `output/` is
+bdout plus `libbdout.so`, a shim `LD_PRELOAD`ed into `PPApp` by a drop-in on
+`BirdDogRunner.service`. It forces one HDMI mode through `drmModeGetConnector` and rewrites the
+video plane in `drmModeSetPlane` for the area of interest, so unlike bdplay and bdomt it never
+takes the display. Design, the PHY's twenty clocks and the traps are in `output/docs/NOTES.md`.
+- **Two new `PACKAGE` members** under the `output` option (`WITH_OUTPUT`, with `WITH_OUTPUT_UI`
+  for the tab): `bdout-linux-arm64` and `libbdout.so`, both to `/userdata/bd-out/`. Burrow
+  needs telling.
+- **The first module with C in it.** The shim is built by zig against glibc 2.28 in
+  `output/build.sh`; the Go tests compile `output/shim/test/confcheck.c` with the host's cc, so
+  CI's output job has a C compiler, and it runs the shim's end-to-end harness on Linux too.
+- **The installer restarts `BirdDogRunner` once at the end** when the module went in, so the
+  drop-in's `LD_PRELOAD` reaches a fresh `PPApp`; `bd-out.service` is `Before=BirdDogRunner`
+  and writes `shim.conf` from the kept settings in `ExecStartPre`.
+- `output` and `out` are reserved module names, and the port is 8095.
+
 Related: [compressionstream gzip engine variance](https://github.com/stoatworks-labs/fleet-notes/blob/main/notes/reference_compressionstream_gzip_engine_variance.md), **release workflow** (working-practice note, kept in Claude memory).

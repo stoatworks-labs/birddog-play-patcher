@@ -33,6 +33,8 @@ WITH_GATEWAY="${WITH_GATEWAY:-0}"
 WITH_GATEWAY_UI="${WITH_GATEWAY_UI:-0}"
 WITH_OMT="${WITH_OMT:-0}"
 WITH_OMT_UI="${WITH_OMT_UI:-0}"
+WITH_OUTPUT="${WITH_OUTPUT:-0}"
+WITH_OUTPUT_UI="${WITH_OUTPUT_UI:-0}"
 WITH_MODULES="${WITH_MODULES:-0}"
 DO_REBOOT="${DO_REBOOT:-0}"
 
@@ -575,6 +577,95 @@ if [ "${OMT_INSTALLED:-0}" = 1 ] && [ "$WITH_OMT_UI" = 1 ] && [ -x /userdata/bd-
   fi
 fi
 
+# ------------------------------------- HDMI formats and area of interest
+# bdout and libbdout.so: a forced HDMI format and an area of interest for the
+# PLAY's own decoder. Unlike bdplay and bdomt nothing takes the display: the
+# shim is preloaded into PPApp by a drop-in on BirdDogRunner.service, hands it
+# a one-mode list and moves its video plane, and bdout writes the shim's
+# settings and serves the Output tab. A drop-in left behind with
+# /userdata/bd-out gone costs a line in the journal (ld.so ignores a preload
+# it cannot find), not the decoder. Source: output/ in
+# github.com/stoatworks-labs/birddog-play-patcher.
+if [ "$WITH_OUTPUT" = 1 ] && [ -d "$SDIR/userdata/bd-out" ]; then
+  NEED_KB=$(du -sk "$SDIR/userdata/bd-out" | awk '{print $1}')
+  if [ -n "$FREE_KB" ] && [ "$FREE_KB" -lt $((NEED_KB + 20480)) ]; then
+    log "SKIPPING HDMI formats: needs ${NEED_KB} KB + 20 MB headroom, only ${FREE_KB} KB free"
+  else
+    log "installing HDMI formats and area of interest (${NEED_KB} KB) to /userdata/bd-out"
+    mkdir -p /userdata/bd-out
+    cp -f "$SDIR/userdata/bd-out/bdout"       /userdata/bd-out/
+    cp -f "$SDIR/userdata/bd-out/libbdout.so" /userdata/bd-out/
+    chmod 755 /userdata/bd-out/bdout /userdata/bd-out/libbdout.so
+    chown -R root:root /userdata/bd-out
+    # config.json and shim.conf are never shipped: bdout writes the defaults
+    # (follow the source, no area of interest) on first start, and an existing
+    # config.json survives a reinstall.
+
+    # 8095 because 8080 is BirdDog's API, 8090 bd-cam-api, 8091 bd-play, 8092
+    # bd-tailscale-ui, 8093 bd-gw and 8094 bd-omt.
+    cat > /etc/systemd/system/bd-out.service <<'EOF'
+[Unit]
+Description=BirdDog PLAY HDMI formats and area of interest (custom)
+# Before the decoder, so ExecStartPre has written shim.conf from the kept
+# settings when PPApp first reads it. Not Requires: if bd-out fails, the shim
+# still reads the last shim.conf, or passes everything through without one.
+# No After= on anything of BirdDog's: an ordering cycle would cost the
+# decoder its start at boot.
+Before=BirdDogRunner.service
+
+[Service]
+Type=simple
+WorkingDirectory=/userdata/bd-out
+# A format being tried when the power went is not kept: shim.conf goes back
+# to config.json's before the decoder starts.
+ExecStartPre=-/userdata/bd-out/bdout --write-conf --dir /userdata/bd-out
+ExecStart=/userdata/bd-out/bdout --serve :8095 --dir /userdata/bd-out
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    mkdir -p /etc/systemd/system/BirdDogRunner.service.d
+    cat > /etc/systemd/system/BirdDogRunner.service.d/bd-out.conf <<'EOF'
+# Written by the custom installer: preloads bdout's shim into PPApp. Remove
+# this file, daemon-reload and restart BirdDogRunner to take it out.
+[Service]
+Environment=LD_PRELOAD=/userdata/bd-out/libbdout.so
+EOF
+    log "HDMI formats unit (bd-out) and BirdDogRunner drop-in written"
+    OUT_INSTALLED=1
+  fi
+fi
+
+# ---------------------------------------------------- web UI "Output" tab
+# videoset.html again, with bdout's markers and the same anchors as the other
+# tabs; the patch is unit tested in the patcher's output/.
+if [ "${OUT_INSTALLED:-0}" = 1 ] && [ "$WITH_OUTPUT_UI" = 1 ] && [ -x /userdata/bd-out/bdout ]; then
+  WEBUI_UNIT=BirdDogWebUI
+  if ! systemctl cat "$WEBUI_UNIT" >/dev/null 2>&1; then
+    log "WARNING: no $WEBUI_UNIT unit on this firmware — skipping the Output tab"
+  elif /userdata/bd-out/bdout --patch-ui --ui-dir /srv/birddog-web-ui --api-port 8095 >> /tmp/bd-custom-install.log 2>&1; then
+    PID_BEFORE=$(pidof birddog-web-ui 2>/dev/null | awk '{print $1}')
+    log "AV Setup page patched; restarting $WEBUI_UNIT (was pid ${PID_BEFORE:-none})"
+    systemctl restart "$WEBUI_UNIT" 2>/dev/null
+    sleep 5
+    PID_AFTER=$(pidof birddog-web-ui 2>/dev/null | awk '{print $1}')
+    CODE=$(curl -s -o /dev/null -m 8 -w '%{http_code}' http://127.0.0.1/login 2>/dev/null || echo 000)
+    if [ -n "$PID_AFTER" ] && [ "$PID_AFTER" != "$PID_BEFORE" ] && { [ "$CODE" = 200 ] || [ "$CODE" = 302 ] || [ "$CODE" = 301 ]; }; then
+      log "web UI healthy after patch (pid ${PID_BEFORE:-none} -> $PID_AFTER, HTTP $CODE) — Output tab is live"
+    else
+      log "WARNING: web UI unhealthy after patching (pid ${PID_BEFORE:-none} -> ${PID_AFTER:-none}, HTTP $CODE) — ROLLING BACK"
+      /userdata/bd-out/bdout --unpatch-ui --ui-dir /srv/birddog-web-ui >> /tmp/bd-custom-install.log 2>&1
+      systemctl restart "$WEBUI_UNIT" 2>/dev/null
+      sleep 5
+      log "after rollback: HTTP $(curl -s -o /dev/null -m 8 -w '%{http_code}' http://127.0.0.1/login 2>/dev/null || echo 000); page as found also at /srv/birddog-web-ui/videoset.html.bdout-stock"
+    fi
+  else
+    log "WARNING: could not patch the AV Setup page — left untouched"
+  fi
+fi
+
 # -------------------------------------------------------------------- rootfs
 if [ -d "$SDIR/files" ]; then
   log "copying rootfs overlay"
@@ -694,6 +785,11 @@ if [ -f /etc/systemd/system/bd-omt.service ]; then
   systemctl restart bd-omt.service 2>/dev/null && log "bd-omt started on :8094" \
     || log "WARNING: bd-omt failed to start — check 'journalctl -u bd-omt'"
 fi
+if [ -f /etc/systemd/system/bd-out.service ]; then
+  systemctl enable bd-out.service 2>/dev/null
+  systemctl restart bd-out.service 2>/dev/null && log "bd-out started on :8095" \
+    || log "WARNING: bd-out failed to start — check 'journalctl -u bd-out'"
+fi
 
 # --------------------------------------------------- restore stock services
 # /bin/birddog-update-wrapper does `systemctl stop BirdDogRunner` before calling
@@ -702,7 +798,16 @@ fi
 # no video, no OSD, just a dark HDMI output. Looks bricked; isn't.
 if [ "$DO_REBOOT" != 1 ]; then
   if systemctl is-active --quiet BirdDogRunner 2>/dev/null; then
-    log "BirdDogRunner already running"
+    if [ "${OUT_INSTALLED:-0}" = 1 ]; then
+      # Something started it before the drop-in was read; PPApp needs a fresh
+      # start for the shim to be in it.
+      systemctl reset-failed BirdDogRunner 2>/dev/null
+      systemctl try-restart BirdDogRunner 2>/dev/null \
+        && log "BirdDogRunner restarted so the HDMI formats shim loads" \
+        || log "WARNING: could not restart BirdDogRunner — the shim loads at the next restart"
+    else
+      log "BirdDogRunner already running"
+    fi
   else
     systemctl start BirdDogRunner 2>/dev/null \
       && log "BirdDogRunner restarted (the wrapper had stopped it)" \
@@ -731,6 +836,11 @@ fi
 if [ "${OMT_INSTALLED:-0}" = 1 ]; then
   log "OMT receiver: pick a source on the OMT tab of AV Setup (or POST to :8094/api/show)"
   log "  showing a source stops the PLAY's own decoder until Stop is pressed"
+fi
+
+if [ "${OUT_INSTALLED:-0}" = 1 ]; then
+  log "HDMI formats and area of interest: the Output tab of AV Setup (or :8095/api/status)"
+  log "  a format is tried first and goes back in 30 s unless kept; bdout --reset forgets both"
 fi
 
 if [ "$DO_REBOOT" = 1 ]; then

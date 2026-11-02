@@ -129,6 +129,32 @@ check(/ExecStart=\/userdata\/bd-omt\/bdomt --serve :8094 --dir \/userdata\/bd-om
   'bd-omt serves on 8094, the port the tab is patched with');
 check(RESERVED_MODULE_NAMES.has('omt'), 'module name "omt" is reserved for the OMT receiver');
 
+// HDMI formats and area of interest: the same guards, the shim preloaded into
+// the PLAY's decoder by a drop-in, shim.conf rewritten from the kept settings
+// before the decoder starts, and the decoder restarted so the shim is in it.
+check(/WITH_OUTPUT="\$\{WITH_OUTPUT:-0\}"/.test(updateSrc), 'installer defaults WITH_OUTPUT to 0');
+check(/if \[ "\$WITH_OUTPUT" = 1 \] && \[ -d "\$SDIR\/userdata\/bd-out" \]/.test(updateSrc),
+  'installer guards the output block on both the flag and the directory');
+check(/if \[ "\$\{OUT_INSTALLED:-0\}" = 1 \] && \[ "\$WITH_OUTPUT_UI" = 1 \]/.test(updateSrc),
+  'installer only patches the Output tab when bdout was installed');
+check(/bdout --unpatch-ui --ui-dir \/srv\/birddog-web-ui/.test(updateSrc),
+  'installer rolls the Output tab back with bdout --unpatch-ui');
+check(/bdout --patch-ui --ui-dir \/srv\/birddog-web-ui --api-port 8095/.test(updateSrc),
+  'the Output tab is patched with port 8095');
+check(/ExecStart=\/userdata\/bd-out\/bdout --serve :8095 --dir \/userdata\/bd-out/.test(updateSrc),
+  'bd-out serves on 8095, the port the tab is patched with');
+check(/ExecStartPre=-\/userdata\/bd-out\/bdout --write-conf --dir \/userdata\/bd-out/.test(updateSrc),
+  'bd-out rewrites shim.conf from the kept settings before every start');
+check(/^Before=BirdDogRunner\.service$/m.test(updateSrc.slice(updateSrc.indexOf('bd-out.service <<'))),
+  'bd-out starts before the decoder, so shim.conf is written when PPApp first reads it');
+check(/BirdDogRunner\.service\.d\/bd-out\.conf <<'EOF'\n(#.*\n)*\[Service\]\nEnvironment=LD_PRELOAD=\/userdata\/bd-out\/libbdout\.so\nEOF/.test(updateSrc),
+  'the BirdDogRunner drop-in preloads exactly the shim');
+check(/OUT_INSTALLED:-0\}" = 1 \]; then\n(\s*#.*\n)*\s*systemctl reset-failed BirdDogRunner/.test(updateSrc),
+  'installer restarts a running decoder so the shim loads');
+for (const n of ['output', 'out']) {
+  check(RESERVED_MODULE_NAMES.has(n), `module name "${n}" is reserved for HDMI formats`);
+}
+
 async function tailscaleTarball() {
   if (process.env.TS_TGZ) {
     console.log(`\ntailscale: using ${process.env.TS_TGZ}`);
@@ -174,7 +200,7 @@ tar.text('./build.conf',
   buildConf({
     tag: 'citest', withTailscale: true, withTailscaleUi: true, withKvm: true,
     withPlay: true, withCam: true, withCamUi: true, withGateway: true, withGatewayUi: true,
-    withOmt: true, withOmtUi: true, withModules: true, doReboot: false,
+    withOmt: true, withOmtUi: true, withOutput: true, withOutputUi: true, withModules: true, doReboot: false,
   }), 0o644);
 
 const bins = await extractTailscale(await tailscaleTarball());
@@ -256,6 +282,22 @@ const bdomtBin = await readFile(join(ASSETS, 'bdomt-linux-arm64'));
 check(bdomtBin.includes('VMX_DecodeNV12'), 'bdomt looks for the patched libvmx\'s VMX_DecodeNV12');
 check((await readFile(join(ASSETS, 'libvmx.so'))).includes('VMX_DecodeNV12'), 'libvmx.so is the patched build (exports VMX_DecodeNV12)');
 
+// HDMI formats and area of interest: bdout and the shim.
+for (const [asset, dest] of [
+  ['bdout-linux-arm64', './userdata/bd-out/bdout'],
+  ['libbdout.so', './userdata/bd-out/libbdout.so'],
+]) {
+  const data = new Uint8Array(await readFile(join(ASSETS, asset)));
+  check(isArm64Elf(data), `${asset} is an aarch64 ELF`);
+  tar.file(dest, data, 0o755);
+}
+const shimBin = await readFile(join(ASSETS, 'libbdout.so'));
+for (const fn of ['drmModeGetConnector', 'drmModeAddFB2', 'drmModeRmFB', 'drmModeSetPlane']) {
+  check(shimBin.includes(fn), `libbdout.so wraps ${fn}`);
+}
+const shimGlibc = Math.max(...[...shimBin.toString('latin1').matchAll(/GLIBC_2\.(\d+)/g)].map((m) => Number(m[1])));
+check(shimGlibc <= 28, `libbdout.so needs glibc 2.${shimGlibc}, no newer than the PLAY's 2.28`);
+
 // A third-party module, packed by the SYSTEM tar from test/fixtures/module —
 // GNU tar in CI, bsdtar on a Mac — so readModule is exercised against a real
 // tar program's output rather than against fw.js writing for itself.
@@ -296,6 +338,7 @@ for (const n of [
   './userdata/bd-gw/mediamtx', './userdata/bd-gw/bdgw', './userdata/bd-gw/run.sh',
   './userdata/bd-gw/api-run.sh', './userdata/bd-gw/LICENSE.mediamtx',
   './userdata/bd-omt/bdomt', './userdata/bd-omt/libvmx.so', './userdata/bd-omt/LICENSE.libvmx',
+  './userdata/bd-out/bdout', './userdata/bd-out/libbdout.so',
 ]) {
   check(byName.has(n), `contains ${n}`);
 }
@@ -365,6 +408,16 @@ check(/^WITH_OMT_UI=0$/m.test(omtOnly) && /^WITH_OMT=0$/m.test(omtOnly),
   'buildConf refuses the OMT tab when the receiver is off');
 check(!members.some((m) => /bd-omt\/config\.json$/.test(m.name)),
   'package carries no OMT config.json');
+
+// The Output tab is served by bdout; the same rule. Its settings are the
+// device's own, and shim.conf is written from them on the device.
+check(!/^WITH_OUTPUT_UI=1$/m.test(conf) || /^WITH_OUTPUT=1$/m.test(conf),
+  'build.conf never ships the Output tab without bdout');
+const outOnly = buildConf({ tag: 't', withOutput: false, withOutputUi: true, doReboot: false });
+check(/^WITH_OUTPUT_UI=0$/m.test(outOnly) && /^WITH_OUTPUT=0$/m.test(outOnly),
+  'buildConf refuses the Output tab when bdout is off');
+check(!members.some((m) => /bd-out\/(config\.json|shim\.conf)$/.test(m.name)),
+  'package carries no bdout config.json or shim.conf');
 
 // The modules flag and directory travel together, in both directions.
 check(/^WITH_MODULES=1$/m.test(conf) === members.some((m) => m.name.startsWith('./modules/')),

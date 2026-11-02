@@ -85,6 +85,7 @@ downloads for the streaming gateway's pinned MediaMTX.
 | `/userdata/bd-cam/` | the UVC converter and its settings API | expected |
 | `/userdata/bd-gw/` | the streaming gateway: MediaMTX, its panel and its settings | expected |
 | `/userdata/bd-omt/` | the OMT receiver, its codec and its settings | expected |
+| `/userdata/bd-out/` | HDMI formats and area of interest: the service, the shim and its settings | expected |
 | `/userdata/bd-<name>/` | each custom module, by convention | expected |
 | `/etc/systemd/system/bd-*.service` | units | yes |
 | `/userdata/bd-probe.txt` | first-boot hardware report | yes |
@@ -227,6 +228,28 @@ has the settings and what to do when it won't show.
 
 ---
 
+## HDMI formats and area of interest (beta)
+
+Out of the box the PLAY picks its HDMI format from the screen's own list to match each stream,
+and always shows the whole picture on the whole screen. This lets you choose the format (a
+standard one, any size and refresh you type, or an exact modeline) and show **part of the
+picture** anywhere on the screen: one screen of a video wall, half a stream, a crop in a corner.
+Open the **Output** tab in the web UI; the same controls are on `http://<play-ip>:8095/`, behind
+your birdUI login.
+
+It **doesn't take the display**: NDI, the OSD and tally carry on. A new format is **tried**. The
+PLAY's decoder restarts on it and a banner counts down from 30 seconds; press **KEEP IT** if the
+picture's right, and if you don't (because the screen has gone dark, say) the last format you
+kept comes back on its own. The area of interest takes within half a second, without a restart.
+
+**Why beta:** it **hasn't run on a PLAY yet**. A small shim goes inside the PLAY's own decoder,
+and it has only run inside a stand-in for that decoder so far. If the real one won't have it,
+the tab says so and nothing changes on screen. Its own
+[user guide](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/output/docs/USER-GUIDE.md)
+covers the formats, the area of interest and what to do when the screen stays dark.
+
+---
+
 ## Custom modules
 
 Under **Custom modules** you can add your own payloads. A module is a small `.tgz` holding a
@@ -273,6 +296,11 @@ systemctl disable --now bd-mtx bd-gw
 # OMT receiver
 systemctl disable --now bd-omt
 /userdata/bd-omt/bdomt --unpatch-ui
+# HDMI formats and area of interest: the decoder restarts without the shim
+systemctl disable --now bd-out
+/userdata/bd-out/bdout --unpatch-ui
+rm -f /etc/systemd/system/BirdDogRunner.service.d/bd-out.conf
+systemctl daemon-reload && systemctl try-restart BirdDogRunner
 # Tailscale and its System page panel
 systemctl disable --now bd-tailscale-ui bd-tailscaled
 /userdata/bd-tailscale-ui/bdts --unpatch-ui
@@ -280,17 +308,17 @@ systemctl disable --now bd-tailscale-ui bd-tailscaled
 systemctl disable --now bd-kvm
 # then, whatever you installed
 systemctl restart BirdDogWebUI
-rm -rf /userdata/tailscale /userdata/bd-{tailscale-ui,kvm,play,cam,gw,omt} \
-  /etc/systemd/system/bd-{tailscaled,tailscale-ui,kvm,play,cam,cam-api,mtx,gw,omt}.service \
+rm -rf /userdata/tailscale /userdata/bd-{tailscale-ui,kvm,play,cam,gw,omt,out} \
+  /etc/systemd/system/bd-{tailscaled,tailscale-ui,kvm,play,cam,cam-api,mtx,gw,omt,out}.service \
   /userdata/bd-probe.txt /userdata/bd-modules.log /srv/birddog-web-ui/static/bd-probe.txt
 ```
 
 Each service stops before its page edit comes out, because the player puts its **USB** entry
 back every time it starts. The player goes first because its unpatch puts back the whole page as
-it found it, which can include the converter's, the gateway's and the OMT receiver's tabs; theirs
-take out only their own. Copies of each page as it was found stay beside them in
+it found it, which can include the converter's, the gateway's, the OMT receiver's and the
+Output tabs; theirs take out only their own. Copies of each page as it was found stay beside them in
 `/srv/birddog-web-ui/` as `settings.html.bdts-stock`, `videoset.html.bdcam-orig`,
-`videoset.html.bdgw-stock` and `videoset.html.bdomt-stock`. Your key
+`videoset.html.bdgw-stock`, `videoset.html.bdomt-stock` and `videoset.html.bdout-stock`. Your key
 stays in `/root/.ssh/authorized_keys`, and a module built from the template leaves
 `bash /userdata/bd-<name>/uninstall`.
 
