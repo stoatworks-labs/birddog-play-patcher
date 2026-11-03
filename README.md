@@ -21,6 +21,9 @@ the device alongside those payloads (see [Custom modules](#custom-modules)).
 
 **Live: <https://birddog-play-patcher.stoatworks-labs.com>**
 
+Its [page on Stoatworks Labs](https://stoatworks-labs.com/web-tools/birddog-play-patcher/) has the video,
+and the [project page](https://stoatworks-labs.com/software/birddog-play-patcher/) has the user guide.
+
 The package is put together entirely in your browser. Nothing is uploaded, you don't need an
 account, and **you don't need your existing firmware file** either: the generated package is a
 standalone overlay installer, not a modified copy of BirdDog's firmware.
