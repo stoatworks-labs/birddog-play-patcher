@@ -121,7 +121,7 @@ func TestStatusReportsRealFailure(t *testing.T) {
 func TestStatusParsesSelfAndExitNodes(t *testing.T) {
 	f := &fakeRun{stdout: map[string]string{"status": `{
 		"Version":"1.102.2","BackendState":"Running","TUN":false,
-		"Self":{"HostName":"birddog-play-42","DNSName":"birddog-play-42.tail1234.ts.net.","TailscaleIPs":["100.88.59.79"],"Online":true},
+		"Self":{"HostName":"birddog-play-42","DNSName":"birddog-play-42.tail1234.ts.net.","TailscaleIPs":["100.64.0.42"],"Online":true},
 		"CurrentTailnet":{"Name":"example.com"},
 		"Peer":{"a":{"HostName":"gw","DNSName":"gw.tail1234.ts.net.","ExitNodeOption":true,"Online":true},
 		        "b":{"HostName":"laptop","ExitNodeOption":false}}}`}}
