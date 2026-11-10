@@ -1,0 +1,119 @@
+#!/bin/bash
+# Installs bd-play-stagetimer on a BirdDog PLAY. Run as root by the firmware
+# package's installer, with this directory as cwd, once per upload — so
+# everything here is safe to repeat. See the patcher's module-template for the
+# contract; the parts that differ from its example are commented.
+#
+# What ends up on the device:
+#   /userdata/bd-stagetimer/bin/bdstage       the daemon and the tab's API (:8096)
+#   /userdata/bd-stagetimer/config.json       written by bdstage, 0600 (it holds
+#                                             the room's API key); kept across reinstalls
+#   /etc/systemd/system/bd-stagetimer.service
+#   a Stagetimer tab on birdUI's AV Setup page
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+NAME="${BD_MODULE:-$(sed -n 's/^NAME=//p' module.conf | head -1 | tr -d "\"'")}"
+VERSION="${BD_MODULE_VERSION:-$(sed -n 's/^VERSION=//p' module.conf | head -1 | tr -d "\"'")}"
+type bd_log >/dev/null 2>&1 || bd_log() { echo "[module:${NAME}] $*"; }
+
+DEST="/userdata/bd-${NAME}"
+UNIT="bd-${NAME}.service"
+
+bd_log "installing ${NAME} ${VERSION} to ${DEST}"
+mkdir -p "$DEST"
+
+# Stop first: a running bdstage may hold the display, and its binary is about
+# to be replaced. Stopping gives HDMI back to BirdDog's decoder; bdstage takes
+# it again after the update if the timer was showing.
+systemctl stop "$UNIT" 2>/dev/null || true
+
+# ------------------------------------------------------------------ program
+cp -f payload/run.sh "$DEST/"
+mkdir -p "$DEST/bin"
+cp -f payload/bin/bdstage "$DEST/bin/bdstage.new"
+mv -f "$DEST/bin/bdstage.new" "$DEST/bin/bdstage"
+cp -f module.conf uninstall "$DEST/"
+chmod 755 "$DEST/run.sh" "$DEST/bin/bdstage" "$DEST/uninstall"
+chown root:root "$DEST" "$DEST/run.sh" "$DEST/bin" "$DEST/bin/bdstage" "$DEST/uninstall" "$DEST/module.conf"
+# The config holds a Stagetimer API key. bdstage writes it 0600; an older copy
+# (or one restored by hand) is put right here.
+[ -f "$DEST/config.json" ] && chmod 600 "$DEST/config.json"
+
+# --------------------------------------------------------------------- unit
+# ExecStopPost: bdstage gives the display back when it is stopped, but not if
+# it is killed outright. While it holds HDMI, /run/bdstage-took-display exists,
+# and this restarts BirdDog's decoder only then — without the marker it would
+# fire on every restart and fight anyone who stopped BirdDogRunner on purpose.
+# It is bd-cam's, plus reset-failed: PPApp aborts in its own teardown often
+# enough that BirdDogRunner can be rate-limited, and then a plain start is
+# refused and HDMI stays dark.
+#
+# KillMode=mixed: SIGTERM to bdstage alone, which stops its gst-launch in order
+# and restarts the decoder; anything left after TimeoutStopSec is killed.
+cat > "/etc/systemd/system/${UNIT}" <<EOF
+[Unit]
+Description=bd-${NAME} ${VERSION}: Stagetimer on HDMI (custom module)
+After=network-online.target BirdDogWebUI.service BirdDogRunner.service
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=${DEST}
+ExecStart=${DEST}/run.sh
+ExecStopPost=-/bin/sh -c 'if [ -e /run/bdstage-took-display ]; then rm -f /run/bdstage-took-display; systemctl reset-failed BirdDogRunner.service; systemctl --no-block start BirdDogRunner.service; fi'
+Restart=always
+RestartSec=10
+KillMode=mixed
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable "$UNIT" >/dev/null 2>&1 || true
+
+# ---------------------------------------------------------------- birdUI tab
+# The same discipline as the patcher's own tabs: the edit is unit tested in
+# this repo, refuses unfamiliar markup and is exactly reversible; this health
+# check and rollback are the second line, because a template birdUI cannot
+# parse takes the firmware upload page down with it.
+WEBUI_UNIT=BirdDogWebUI
+TEMPLATE=/srv/birddog-web-ui/videoset.html
+if ! systemctl cat "$WEBUI_UNIT" >/dev/null 2>&1; then
+  bd_log "WARNING: no $WEBUI_UNIT unit on this firmware — no Stagetimer tab, and nothing to set it up from"
+elif grep -q 'bdstage-stagetimer-tab:start' "$TEMPLATE" 2>/dev/null; then
+  "$DEST/bin/bdstage" --patch-ui >/dev/null 2>&1 || true   # refreshes the tab script only
+  bd_log "Stagetimer tab already present"
+elif "$DEST/bin/bdstage" --patch-ui; then
+  PID_BEFORE=$(pidof birddog-web-ui 2>/dev/null | awk '{print $1}' || true)
+  bd_log "AV Setup page patched; restarting $WEBUI_UNIT (was pid ${PID_BEFORE:-none})"
+  systemctl restart "$WEBUI_UNIT" 2>/dev/null || true
+  sleep 5
+  PID_AFTER=$(pidof birddog-web-ui 2>/dev/null | awk '{print $1}' || true)
+  CODE=$(curl -s -o /dev/null -m 8 -w '%{http_code}' http://127.0.0.1/login 2>/dev/null || echo 000)
+  # (pidof exits 1 when the web UI is not running; under pipefail that would
+  # abort the install here, before the service is started. Hence || true.)
+  # A new pid AND an answer: an unchanged pid means the template was never
+  # re-read, and its 200 proves nothing.
+  if [ -n "$PID_AFTER" ] && [ "$PID_AFTER" != "$PID_BEFORE" ] && { [ "$CODE" = 200 ] || [ "$CODE" = 302 ] || [ "$CODE" = 301 ]; }; then
+    bd_log "web UI healthy after patch (pid ${PID_BEFORE:-none} -> $PID_AFTER, HTTP $CODE) — Stagetimer tab is live"
+  else
+    bd_log "WARNING: web UI unhealthy after patching (pid ${PID_BEFORE:-none} -> ${PID_AFTER:-none}, HTTP $CODE) — ROLLING BACK"
+    "$DEST/bin/bdstage" --unpatch-ui || true
+    systemctl restart "$WEBUI_UNIT" 2>/dev/null || true
+    sleep 5
+    bd_log "after rollback: HTTP $(curl -s -o /dev/null -m 8 -w '%{http_code}' http://127.0.0.1/login 2>/dev/null || echo 000); page as found also at ${TEMPLATE}.bdstage-stock"
+  fi
+else
+  bd_log "WARNING: could not patch the AV Setup page — left untouched"
+fi
+
+# ------------------------------------------------------------------- start
+# bdstage waits for the PLAY's decoder to be back before it takes the display,
+# so starting it now is safe: the updater restarts BirdDogRunner at the end,
+# and bdstage then stops it again if the timer was on HDMI before.
+if systemctl restart "$UNIT"; then
+  bd_log "${UNIT} started — AV Setup › Stagetimer (log in to the web UI first)"
+else
+  bd_log "WARNING: ${UNIT} failed to start — journalctl -u ${UNIT}"
+fi
