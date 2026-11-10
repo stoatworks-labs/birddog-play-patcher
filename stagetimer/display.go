@@ -18,7 +18,7 @@ package main
 //     that; it stays stopped when we let go.
 //
 // And bdcam's marker: while we hold the display, /run/bdstage-took-display
-// exists, and bd-stagetimer.service's ExecStopPost restarts BirdDogRunner if
+// exists, and bd-stage.service's ExecStopPost restarts BirdDogRunner if
 // it finds the marker. That covers the one exit this process cannot clean up after —
 // being killed outright. /run is tmpfs, so a reboot clears it.
 

@@ -36,7 +36,7 @@ import (
 var version = "dev"
 
 const (
-	defaultDir     = "/userdata/bd-stagetimer"
+	defaultDir     = "/userdata/bd-stage"
 	defaultUIDir   = "/srv/birddog-web-ui"
 	defaultUIBase  = "http://127.0.0.1"
 	defaultAPIPort = 8096
@@ -198,7 +198,7 @@ func runServe(log *Logger, o serveOpts) int {
 		go resume(log, screen, cfg, o.display == "ppapp")
 	}
 
-	// Shutting down must give HDMI back: a restart of bd-stagetimer that
+	// Shutting down must give HDMI back: a restart of bd-stage that
 	// skipped this would leave the unit dark. Showing stays as it is, so a
 	// reboot or an upgrade comes back to the timer.
 	sig := make(chan os.Signal, 1)

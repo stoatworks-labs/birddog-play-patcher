@@ -106,6 +106,16 @@ stage_play SHIM_LINE libbdout.so       "$REPO/output/dist/libbdout.so"       "li
   "or output/dist/libbdout.so missing (run output/build.sh) —" \
   "the HDMI formats option will be disabled" >&2
 
+# ---------------------------------------------------------- stagetimer
+# Stagetimer: bdstage, built by stagetimer/build.sh and committed in
+# stagetimer/dist/, plus the SIL Open Font Licence of the Noto Sans embedded
+# in it, which goes in the package beside the binary.
+STAGE_LINE=null
+stage_play STAGE_LINE bdstage-linux-arm64 "$REPO/stagetimer/dist/bdstage-linux-arm64" "Stagetimer"
+cp "$REPO/stagetimer/fonts/OFL.txt" "$OUT/OFL.noto-sans.txt"
+[ "$STAGE_LINE" = null ] && echo "warning: stagetimer/dist/bdstage-linux-arm64 missing" \
+  "(run stagetimer/build.sh) — the Stagetimer option will be disabled" >&2
+
 # --------------------------------------------------------------- bdts
 # The birdUI Tailscale panel. Ships with the Tailscale payload rather than as
 # its own option: without it a device installs Tailscale and then still needs
@@ -149,6 +159,8 @@ cat > "$OUT/manifest.json" <<EOF
   "libvmxLicense": { "size": $(wc -c < "$OUT/LICENSE.libvmx" | tr -d ' '), "sha256": "$(sha "$OUT/LICENSE.libvmx")" },
   "bdout":    $OUT_LINE,
   "libbdout": $SHIM_LINE,
+  "bdstage":  $STAGE_LINE,
+  "stageFontLicense": { "size": $(wc -c < "$OUT/OFL.noto-sans.txt" | tr -d ' '), "sha256": "$(sha "$OUT/OFL.noto-sans.txt")" },
   "bdplay": $PLAY_LINE,
   "bdpdf":  $PDF_LINE,
   "pdfium": $PDFLIB_LINE,

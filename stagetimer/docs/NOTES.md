@@ -1,6 +1,7 @@
 # Notes
 
-What was learned building bd-play-stagetimer, and what is still open. Dated
+What was learned building bdstage (until 2026-11-10 its own repo,
+bd-play-stagetimer, loaded as a custom module), and what is still open. Dated
 where it is about someone else's system, because those change.
 
 ## Stagetimer's API (as of 2026-11-10)
@@ -82,21 +83,39 @@ specifically —
   there has `fdsrc`, `rawvideoparse`, `queue` and `kmssink`. The pipeline took
   all 34 frames of the scripted show as 1080p NV12, and `videoconvert` (BT.709)
   gave back every palette colour within 4/255.
-- 2026-11-10: the archive passes the patcher's own reader
-  (`scripts/patcher-accepts.mjs`).
+- 2026-11-10: as a custom module, the archive passed the patcher's own reader.
+- 2026-11-10: made a built-in option of the patcher instead. The module's
+  `install` became a block of birddog-re's fwbuild payload, with the paths the
+  other built-ins use (`/userdata/bd-stage`, `bd-stage.service`), and the
+  module files (`module.conf`, `install`, `uninstall`, `payload/run.sh`,
+  `check.sh`) went. Logging is now the journal's, as for bdomt, rather than a
+  file `run.sh` rotated.
+- 2026-11-10, tart VM `wlos-build`: the installer from a real fwbuild package
+  (Stagetimer only) run as root in an overlay chroot of the factory
+  `PLAY_1.0.30.img`, with `systemctl`, `pidof` and `curl` stubbed and
+  `/etc/birddog-hardware-version` planted (the device writes it at runtime;
+  the image has none, and the installer rightly refuses without it). Fresh
+  install: binary 0755, `OFL.txt` 0644, unit written, enabled and started,
+  tab added with `videoset.html.bdstage-stock` beside it, `--version` runs.
+  Reinstall over it with a `config.json` planted at 0644: page untouched, tab
+  script refreshed, `config.json` back to 0600. With the web UI's health check
+  answering 000: rolled back, page identical to the factory one, tab script
+  gone. The unit's `ExecStopPost` body run by hand: nothing without
+  `/run/bdstage-took-display`; with it, `reset-failed` then `--no-block start
+  BirdDogRunner`, and the marker removed.
 
 ## On a PLAY
 
 Nothing yet. In order:
 
-1. Install through the patcher; the tab appears and the web UI still answers
-   (the health check would roll it back otherwise).
+1. Install through the patcher with the Stagetimer option; the tab appears and
+   the web UI still answers (the health check would roll it back otherwise).
 2. `bdstage --probe` over SSH with a real room: TLS from the PLAY, the socket,
    the events' payloads (above).
 3. SHOW ON HDMI: PPApp stops, the timer appears, at 1080p60 and 720p outputs.
    Colours: if yellow looks orange or white looks pink, the VOP reads NV12 as
    BT.601 and `nv12.go` changes.
-4. STOP, `systemctl stop bd-stagetimer`, `kill -9` of bdstage, a reboot while
+4. STOP, `systemctl stop bd-stage`, `kill -9` of bdstage, a reboot while
    showing, a firmware update while showing: PPApp comes back every time, and
    the timer comes back after the last two.
 5. A 4K output: drawn at 1080p, does kmssink scale it?

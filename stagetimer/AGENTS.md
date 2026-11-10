@@ -1,21 +1,29 @@
-# AGENTS.md — bd-play-stagetimer
+# AGENTS.md — stagetimer/ (bdstage)
 
-A PLAY Patcher module that puts a Stagetimer room on a BirdDog PLAY's HDMI
-output (RK3328, 4× Cortex-A53, stock Debian 10). `bdstage` (Go, static, this
-repo) reads the room over Stagetimer's API v1, draws the screens itself and
-pipes NV12 frames into `gst-launch … ! kmssink`. Start with `README.md`; this
-file is the rules.
+The PLAY Patcher's *Stagetimer* option: it puts a Stagetimer room on a BirdDog
+PLAY's HDMI output (RK3328, 4× Cortex-A53, stock Debian 10). `bdstage` (Go,
+static, this folder) reads the room over Stagetimer's API v1, draws the screens
+itself and pipes NV12 frames into `gst-launch … ! kmssink`. Start with
+`README.md`; this file is the rules.
 
 ## Where this sits
 
-Sibling of `bdcam`, `bdts`, `bd-play-usb-player`, `bd-play-stream-gateway` and
-`bd-play-signage` under `~/Projects/birddog-play`. The module contract is the
-patcher's `module-template/`. The display handover, the session gate and the
-tab patch are bdomt's (`birddog-play-patcher/omt/`), which took them from
-bdplay, bdgw and bdts; when one of those learns something on hardware, carry it
-over. The reverse engineering behind every claim about the PLAY lives in the
-private `birddog-re`; never copy key material, firmware or BirdDog's web UI
-source into this repo (`testdata/firmware/` is gitignored for exactly that).
+A folder of birddog-play-patcher, beside `player/`, `converter/`, `gateway/`,
+`omt/`, `output/` and `tailscale-ui/`; read the repo's own `AGENTS.md` first.
+It was its own repo, bd-play-stagetimer, until 2026-11-10 and came in with its
+history (`git subtree split --prefix=stagetimer` recovers it). The page ships
+`dist/bdstage-linux-arm64`, which `build.sh` writes and which is committed: a
+source change ships only when someone rebuilds and commits that binary. The
+installer block (`bd-stage`, `/userdata/bd-stage`, `WITH_STAGETIMER` and
+`WITH_STAGETIMER_UI`) lives upstream in `birddog-re`'s fwbuild payload and
+reaches `installer/update` by `scripts/sync-from-re.sh`; change it there.
+
+The display handover, the session gate and the tab patch are bdomt's
+(`omt/`), which took them from bdplay, bdgw and bdts; when one of those learns
+something on hardware, carry it over. The reverse engineering behind every
+claim about the PLAY lives in the private `birddog-re`; never copy key
+material, firmware or BirdDog's web UI source into this repo
+(`testdata/firmware/` is gitignored for exactly that).
 
 ## Hard rules
 
@@ -59,12 +67,13 @@ source into this repo (`testdata/firmware/` is gitignored for exactly that).
     README's verification table is the authority. Chroot-on-a-VM results are
     evidence about the userland and none about the RK3328.
 
-Port **8096** (8090–8095 are taken by the patcher's modules and signage).
+Port **8096** (8090–8095 are taken by the patcher's other payloads).
+`stagetimer` and `stage` are reserved module names.
 
 ## Toolchain
 
 ```bash
-./build.sh                       # gofmt, vet (host and arm64), tests, tab syntax, aarch64 build, check.sh, .tgz
+./build.sh                       # gofmt, vet (host and arm64), tests, tab syntax, dist/bdstage-linux-arm64
 go test -race ./...
 go run ./tools/mockstage         # a mock Stagetimer; see README
 sudo tools/verify-stock.sh …     # the video pipeline in the factory rootfs, on an aarch64 Linux host
@@ -89,5 +98,6 @@ serve.go         the tab's API; auth.go the birdUI session gate
 patch.go         the Stagetimer tab on videoset.html; web/stagetimer.js the tab
 demo.go          sample screens for --demo and the tests
 internal/mockstage, tools/mockstage   a mock Stagetimer
-install, uninstall, module.conf, payload/run.sh   the module
+fonts/           Noto Sans (embedded) and OFL.txt (packed beside the binary)
+dist/            bdstage-linux-arm64, committed: what the page serves
 ```

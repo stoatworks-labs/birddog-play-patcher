@@ -172,4 +172,24 @@ takes the display. Design, the PHY's twenty clocks and the traps are in `output/
   and writes `shim.conf` from the kept settings in `ExecStartPre`.
 - `output` and `out` are reserved module names, and the port is 8095.
 
+**Stagetimer added 2026-11-10 (beta, NOT run on a PLAY).** `stagetimer/` is bdstage, which
+puts a stagetimer.io room on HDMI: the timer, the agenda, both, or the clock, following the
+room live over Stagetimer's API. It takes the display the bdplay way. It was its own public
+repo, `stoatworks-labs/bd-play-stagetimer`, for a day as a custom module, and came in with its
+history; the module files went and its `install` became a block of the fwbuild payload.
+- **Two new `PACKAGE` members** under the `stagetimer` option (`WITH_STAGETIMER`, with
+  `WITH_STAGETIMER_UI` for the tab): `bdstage-linux-arm64` and the Noto Sans `OFL.txt`, both to
+  `/userdata/bd-stage/`. The fonts are embedded in the binary, so their licence is shipped
+  beside it. Burrow needs telling.
+- **No cgo and no zig:** bdstage is pure Go, so `stagetimer/build.sh` builds a static binary
+  anywhere. The tests read BirdDog's real AV Setup pages from a gitignored
+  `stagetimer/testdata/firmware/` and skip without them.
+- The installer block came via `sync-from-re.sh`, which pulled `agent/go.mod`/`go.sum` back to
+  purego 0.11.0 again; put back by hand.
+- **Run in a chroot, not on a PLAY:** the installer from a real fwbuild package ran in an
+  overlay of the factory 1.0.30 rootfs on `wlos-build`, healthy and rollback; the cases and
+  results are in `stagetimer/docs/NOTES.md`.
+- `stagetimer` and `stage` are reserved module names, and the port is 8096. `dist/` is
+  committed before a hardware test, as bdomt's was.
+
 Related: [compressionstream gzip engine variance](https://github.com/stoatworks-labs/fleet-notes/blob/main/notes/reference_compressionstream_gzip_engine_variance.md), **release workflow** (working-practice note, kept in Claude memory).

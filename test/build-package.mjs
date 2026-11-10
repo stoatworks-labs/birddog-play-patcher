@@ -155,6 +155,28 @@ for (const n of ['output', 'out']) {
   check(RESERVED_MODULE_NAMES.has(n), `module name "${n}" is reserved for HDMI formats`);
 }
 
+// Stagetimer: the same guards; the decoder handed back by systemd if bdstage
+// is killed while it holds the display (but only then, and after clearing a
+// rate limit); its config.json, which holds the room's API key, kept 0600.
+check(/WITH_STAGETIMER="\$\{WITH_STAGETIMER:-0\}"/.test(updateSrc), 'installer defaults WITH_STAGETIMER to 0');
+check(/if \[ "\$WITH_STAGETIMER" = 1 \] && \[ -d "\$SDIR\/userdata\/bd-stage" \]/.test(updateSrc),
+  'installer guards the Stagetimer block on both the flag and the directory');
+check(/if \[ "\$\{STAGE_INSTALLED:-0\}" = 1 \] && \[ "\$WITH_STAGETIMER_UI" = 1 \]/.test(updateSrc),
+  'installer only patches the Stagetimer tab when bdstage was installed');
+check(/bdstage --unpatch-ui --ui-dir \/srv\/birddog-web-ui/.test(updateSrc),
+  'installer rolls the Stagetimer tab back with bdstage --unpatch-ui');
+check(/bdstage --patch-ui --ui-dir \/srv\/birddog-web-ui --api-port 8096/.test(updateSrc),
+  'the Stagetimer tab is patched with port 8096');
+check(/ExecStart=\/userdata\/bd-stage\/bdstage --serve :8096 --dir \/userdata\/bd-stage/.test(updateSrc),
+  'bd-stage serves on 8096, the port the tab is patched with');
+check(/ExecStopPost=.*\/run\/bdstage-took-display.*systemctl reset-failed BirdDogRunner; systemctl --no-block start BirdDogRunner/.test(updateSrc),
+  'bd-stage.service restarts BirdDogRunner after a kill, keyed on bdstage\'s marker');
+check(/chmod 600 \/userdata\/bd-stage\/config\.json/.test(updateSrc),
+  'installer keeps the Stagetimer config (the API key) readable by root only');
+for (const n of ['stagetimer', 'stage']) {
+  check(RESERVED_MODULE_NAMES.has(n), `module name "${n}" is reserved for Stagetimer`);
+}
+
 async function tailscaleTarball() {
   if (process.env.TS_TGZ) {
     console.log(`\ntailscale: using ${process.env.TS_TGZ}`);
@@ -200,7 +222,8 @@ tar.text('./build.conf',
   buildConf({
     tag: 'citest', withTailscale: true, withTailscaleUi: true, withKvm: true,
     withPlay: true, withCam: true, withCamUi: true, withGateway: true, withGatewayUi: true,
-    withOmt: true, withOmtUi: true, withOutput: true, withOutputUi: true, withModules: true, doReboot: false,
+    withOmt: true, withOmtUi: true, withOutput: true, withOutputUi: true,
+    withStagetimer: true, withStagetimerUi: true, withModules: true, doReboot: false,
   }), 0o644);
 
 const bins = await extractTailscale(await tailscaleTarball());
@@ -298,6 +321,19 @@ for (const fn of ['drmModeGetConnector', 'drmModeAddFB2', 'drmModeRmFB', 'drmMod
 const shimGlibc = Math.max(...[...shimBin.toString('latin1').matchAll(/GLIBC_2\.(\d+)/g)].map((m) => Number(m[1])));
 check(shimGlibc <= 28, `libbdout.so needs glibc 2.${shimGlibc}, no newer than the PLAY's 2.28`);
 
+// Stagetimer: bdstage, static, and the fonts' SIL Open Font Licence beside it.
+{
+  const bdstage = new Uint8Array(await readFile(join(ASSETS, 'bdstage-linux-arm64')));
+  check(isArm64Elf(bdstage), 'bdstage-linux-arm64 is an aarch64 ELF');
+  check(!Buffer.from(bdstage).includes('ld-linux-aarch64.so'), 'bdstage is static (no dynamic loader named)');
+  check(Buffer.from(bdstage).includes('bdstage-stagetimer-tab:start'), 'bdstage carries the Stagetimer tab patch');
+  tar.file('./userdata/bd-stage/bdstage', bdstage, 0o755);
+  const ofl = new Uint8Array(await readFile(join(ASSETS, 'OFL.noto-sans.txt')));
+  check(/SIL Open Font License, Version 1\.1/.test(new TextDecoder().decode(ofl)) &&
+    /The Noto Project Authors/.test(new TextDecoder().decode(ofl)), 'OFL.txt is Noto Sans\'s Open Font Licence');
+  tar.file('./userdata/bd-stage/OFL.txt', ofl, 0o644);
+}
+
 // A third-party module, packed by the SYSTEM tar from test/fixtures/module —
 // GNU tar in CI, bsdtar on a Mac — so readModule is exercised against a real
 // tar program's output rather than against fw.js writing for itself.
@@ -339,6 +375,7 @@ for (const n of [
   './userdata/bd-gw/api-run.sh', './userdata/bd-gw/LICENSE.mediamtx',
   './userdata/bd-omt/bdomt', './userdata/bd-omt/libvmx.so', './userdata/bd-omt/LICENSE.libvmx',
   './userdata/bd-out/bdout', './userdata/bd-out/libbdout.so',
+  './userdata/bd-stage/bdstage', './userdata/bd-stage/OFL.txt',
 ]) {
   check(byName.has(n), `contains ${n}`);
 }
@@ -418,6 +455,16 @@ check(/^WITH_OUTPUT_UI=0$/m.test(outOnly) && /^WITH_OUTPUT=0$/m.test(outOnly),
   'buildConf refuses the Output tab when bdout is off');
 check(!members.some((m) => /bd-out\/(config\.json|shim\.conf)$/.test(m.name)),
   'package carries no bdout config.json or shim.conf');
+
+// The Stagetimer tab is served by bdstage; the same rule. Its config.json holds
+// the room's API key, so it is never in a package.
+check(!/^WITH_STAGETIMER_UI=1$/m.test(conf) || /^WITH_STAGETIMER=1$/m.test(conf),
+  'build.conf never ships the Stagetimer tab without bdstage');
+const stageOnly = buildConf({ tag: 't', withStagetimer: false, withStagetimerUi: true, doReboot: false });
+check(/^WITH_STAGETIMER_UI=0$/m.test(stageOnly) && /^WITH_STAGETIMER=0$/m.test(stageOnly),
+  'buildConf refuses the Stagetimer tab when bdstage is off');
+check(!members.some((m) => /bd-stage\/config\.json$/.test(m.name)),
+  'package carries no Stagetimer config.json');
 
 // The modules flag and directory travel together, in both directions.
 check(/^WITH_MODULES=1$/m.test(conf) === members.some((m) => m.name.startsWith('./modules/')),

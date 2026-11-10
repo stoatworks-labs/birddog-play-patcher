@@ -184,6 +184,8 @@ async function build() {
     const withOmtUi = withOmt && els.optOmtUi.checked;
     const withOutput = els.optOutput.checked && !!manifest.bdout && !!manifest.libbdout;
     const withOutputUi = withOutput && els.optOutputUi.checked;
+    const withStagetimer = els.optStagetimer.checked && !!manifest.bdstage;
+    const withStagetimerUi = withStagetimer && els.optStagetimerUi.checked;
     // A rejected module is never dropped silently: the user chose it, so
     // building without it would ship something other than what they asked for.
     const bad = modules.filter((m) => m.error);
@@ -211,7 +213,8 @@ async function build() {
     tar.text(PART.authorizedKeys.member, keyText + '\n', PART.authorizedKeys.mode);
     tar.text(PART.buildConf.member, buildConf({
       tag, withTailscale, withTailscaleUi, withKvm, withPlay, withCam, withCamUi,
-      withGateway, withGatewayUi, withOmt, withOmtUi, withOutput, withOutputUi, withModules, doReboot,
+      withGateway, withGatewayUi, withOmt, withOmtUi, withOutput, withOutputUi,
+      withStagetimer, withStagetimerUi, withModules, doReboot,
     }), PART.buildConf.mode);
 
     for (const rel of manifest.rootfsOverlay || []) {
@@ -329,6 +332,18 @@ async function build() {
       log('HDMI formats and area of interest: skipped');
     }
 
+    if (withStagetimer) {
+      log('adding Stagetimer…');
+      const bdstage = await addVerified(tar, PART.bdstage);
+      await addScript(tar, PART.stageFontLicense);
+      log(`  bdstage ${humanSize(bdstage.length)}, sha256 verified`, 'ok');
+      log(withStagetimerUi
+        ? '  web UI tab: yes — videoset.html patched beside the other tabs, BirdDogWebUI restarted with rollback'
+        : '  web UI tab: no — the room is set on port 8096 only');
+    } else {
+      log('Stagetimer: skipped');
+    }
+
     if (withModules) {
       log('adding custom modules — each install runs as root after the payloads above…');
       for (const { file, mod } of modules) {
@@ -376,6 +391,7 @@ async function init() {
     'optGateway', 'optGatewayUi', 'gatewayRow', 'mtxFile',
     'optOmt', 'optOmtUi', 'omtRow',
     'optOutput', 'optOutputUi', 'outputRow',
+    'optStagetimer', 'optStagetimerUi', 'stagetimerRow',
     'build', 'download', 'log', 'result', 'resultName', 'resultSize',
     'resultSha', 'kvmRow', 'playRow', 'playExtras', 'payloadInfo', 'keyHint',
   ]) {
@@ -406,6 +422,12 @@ async function init() {
       els.optOutputUi.disabled = !els.optOutput.checked;
     });
     els.optOutputUi.disabled = !els.optOutput.checked;
+  }
+  if (els.optStagetimer) {
+    els.optStagetimer.addEventListener('change', () => {
+      els.optStagetimerUi.disabled = !els.optStagetimer.checked;
+    });
+    els.optStagetimerUi.disabled = !els.optStagetimer.checked;
   }
   els.download.addEventListener('click', download);
   els.modFiles.addEventListener('change', modulesChosen);
@@ -461,6 +483,13 @@ async function init() {
     els.optOutputUi.disabled = true;
     els.outputRow.classList.add('disabled');
     els.outputRow.title = 'bdout-linux-arm64 or libbdout.so was not present when assets were built';
+  }
+  if (!manifest.bdstage) {
+    els.optStagetimer.checked = false;
+    els.optStagetimer.disabled = true;
+    els.optStagetimerUi.disabled = true;
+    els.stagetimerRow.classList.add('disabled');
+    els.stagetimerRow.title = 'bdstage-linux-arm64 was not present when assets were built';
   }
   if (!manifest.bdcam) {
     els.optCam.checked = false;

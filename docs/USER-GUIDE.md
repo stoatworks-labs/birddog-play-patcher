@@ -2,11 +2,12 @@
 
 BirdDog PLAY Patcher builds an installable `.fw` for a [BirdDog PLAY](https://birddog.tv) that
 adds **an SSH key, Tailscale, an NDI KVM endpoint, a USB media player, a UVC converter, a
-streaming gateway and an OMT receiver**, plus **modules of your own**. With those, a PLAY can be
-reached and managed remotely, drive the machine it's displaying, play video, stills and PDFs off a
-USB stick, turn a USB camera into an NDI, SRT or HDMI source, take RTMP, RTSP, HLS, WebRTC and UDP
-streams onto its screen and send that camera back out the same ways, and show Open Media
-Transport sources.
+streaming gateway, an OMT receiver, HDMI formats and area of interest, and a Stagetimer
+display**, plus **modules of your own**. With those, a PLAY can be reached and managed remotely,
+drive the machine it's displaying, play video, stills and PDFs off a USB stick, turn a USB camera
+into an NDI, SRT or HDMI source, take RTMP, RTSP, HLS, WebRTC and UDP streams onto its screen and
+send that camera back out the same ways, show Open Media Transport sources, and show a
+stagetimer.io room's countdown.
 
 **The package is put together entirely in your browser.** Nothing is uploaded, you don't need an
 account, and **you don't need your existing firmware file** either: the generated package is a
@@ -86,6 +87,7 @@ downloads for the streaming gateway's pinned MediaMTX.
 | `/userdata/bd-gw/` | the streaming gateway: MediaMTX, its panel and its settings | expected |
 | `/userdata/bd-omt/` | the OMT receiver, its codec and its settings | expected |
 | `/userdata/bd-out/` | HDMI formats and area of interest: the service, the shim and its settings | expected |
+| `/userdata/bd-stage/` | Stagetimer: the service, its fonts' licence, and its settings, which hold the room's API key | expected |
 | `/userdata/bd-<name>/` | each custom module, by convention | expected |
 | `/etc/systemd/system/bd-*.service` | units | yes |
 | `/userdata/bd-probe.txt` | first-boot hardware report | yes |
@@ -250,6 +252,31 @@ covers the formats, the area of interest and what to do when the screen stays da
 
 ---
 
+## Stagetimer (beta)
+
+This puts a [stagetimer.io](https://stagetimer.io) room on the HDMI output: the speaker's
+countdown with its wrap-up colours, the rundown, both side by side, or the time of day. Run the
+show from Stagetimer's Controller as usual; messages, flash, blackout and On Air follow it. Open
+the **Stagetimer** tab in the web UI, paste the room ID and API key from the room's API page
+(Controller → menu → **API**), press **TEST**, then **APPLY** and **SHOW ON HDMI**. The same
+controls are on `http://<play-ip>:8096/`, behind your birdUI login, and the PLAY needs to reach
+`api.stagetimer.io`.
+
+The key stays on the PLAY, readable by root only; the tab only ever sees its last four
+characters. Like the USB media player, it **takes the display**: the PLAY's decoder is stopped
+while the timer is shown, so NDI, the OSD and tally are gone until you press **STOP**, which starts
+it again. A timer that was showing comes back after a power cut. The screens are drawn on the
+PLAY, so the room's logo and Stagetimer's custom fonts and colours aren't reproduced. Not
+affiliated with Stagetimer.
+
+**Why beta:** it **hasn't run on a PLAY yet**. It has met Stagetimer's real API only as far as
+being refused with a made-up room, and its frames have gone through the PLAY's GStreamer version
+inside the PLAY's own factory system image. Its own
+[user guide](https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/stagetimer/docs/USER-GUIDE.md)
+covers the screens and what to do when the room won't connect.
+
+---
+
 ## Custom modules
 
 Under **Custom modules** you can add your own payloads. A module is a small `.tgz` holding a
@@ -279,8 +306,8 @@ and read *Building a module* on the site. A module built from the template can b
 ## Undoing it
 
 Over SSH, run the lines for each option you installed, in this order. For the gateway, clear
-**Show on HDMI** in its tab first so the decoder is handed back, and for the OMT receiver press
-**STOP** on its tab.
+**Show on HDMI** in its tab first so the decoder is handed back, and for the OMT receiver and
+Stagetimer press **STOP** on their tabs.
 
 ```
 # USB media player
@@ -301,6 +328,9 @@ systemctl disable --now bd-out
 /userdata/bd-out/bdout --unpatch-ui
 rm -f /etc/systemd/system/BirdDogRunner.service.d/bd-out.conf
 systemctl daemon-reload && systemctl try-restart BirdDogRunner
+# Stagetimer (its config.json, with the room's API key, goes with /userdata/bd-stage)
+systemctl disable --now bd-stage
+/userdata/bd-stage/bdstage --unpatch-ui
 # Tailscale and its System page panel
 systemctl disable --now bd-tailscale-ui bd-tailscaled
 /userdata/bd-tailscale-ui/bdts --unpatch-ui
@@ -308,17 +338,18 @@ systemctl disable --now bd-tailscale-ui bd-tailscaled
 systemctl disable --now bd-kvm
 # then, whatever you installed
 systemctl restart BirdDogWebUI
-rm -rf /userdata/tailscale /userdata/bd-{tailscale-ui,kvm,play,cam,gw,omt,out} \
-  /etc/systemd/system/bd-{tailscaled,tailscale-ui,kvm,play,cam,cam-api,mtx,gw,omt,out}.service \
+rm -rf /userdata/tailscale /userdata/bd-{tailscale-ui,kvm,play,cam,gw,omt,out,stage} \
+  /etc/systemd/system/bd-{tailscaled,tailscale-ui,kvm,play,cam,cam-api,mtx,gw,omt,out,stage}.service \
   /userdata/bd-probe.txt /userdata/bd-modules.log /srv/birddog-web-ui/static/bd-probe.txt
 ```
 
 Each service stops before its page edit comes out, because the player puts its **USB** entry
 back every time it starts. The player goes first because its unpatch puts back the whole page as
-it found it, which can include the converter's, the gateway's, the OMT receiver's and the
-Output tabs; theirs take out only their own. Copies of each page as it was found stay beside them in
+it found it, which can include the converter's, the gateway's, the OMT receiver's, the
+Output and the Stagetimer tabs; theirs take out only their own. Copies of each page as it was found stay beside them in
 `/srv/birddog-web-ui/` as `settings.html.bdts-stock`, `videoset.html.bdcam-orig`,
-`videoset.html.bdgw-stock`, `videoset.html.bdomt-stock` and `videoset.html.bdout-stock`. Your key
+`videoset.html.bdgw-stock`, `videoset.html.bdomt-stock`, `videoset.html.bdout-stock` and
+`videoset.html.bdstage-stock`. Your key
 stays in `/root/.ssh/authorized_keys`, and a module built from the template leaves
 `bash /userdata/bd-<name>/uninstall`.
 

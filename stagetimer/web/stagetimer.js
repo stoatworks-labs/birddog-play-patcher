@@ -309,7 +309,7 @@
     var ok = authed(s) && !s.unreachable;
     var locked = !ok || busy;
     var left = authBanner(s);
-    if (s.unreachable) left += banner('#c0392b', 'The Stagetimer service is not responding (bd-stagetimer): ' + s.unreachable);
+    if (s.unreachable) left += banner('#c0392b', 'The Stagetimer service is not responding (bd-stage): ' + s.unreachable);
     if (s.caps && !s.caps.raw_video) left += banner('#c0392b', 'This PLAY’s GStreamer has no rawvideoparse, so nothing can be drawn on HDMI.');
 
     if (cfg) {

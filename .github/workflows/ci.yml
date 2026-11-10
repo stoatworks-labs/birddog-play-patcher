@@ -111,6 +111,7 @@ jobs:
           - { dir: tailscale-ui, bin: bdts, tab: web/bdts-tailscale.js, placeholder: __BDTS_API_PORT__, port: "8092" }
           - { dir: omt, bin: bdomt, tab: web/omt.js, placeholder: __BDOMT_API_PORT__, port: "8094", libvmx: true }
           - { dir: output, bin: bdout, tab: web/output.js, placeholder: __BDOUT_API_PORT__, port: "8095", shim: true }
+          - { dir: stagetimer, bin: bdstage, tab: web/stagetimer.js, placeholder: __BDSTAGE_API_PORT__, port: "8096" }
     defaults:
       run:
         working-directory: ${{ matrix.dir }}

@@ -281,6 +281,48 @@
         <div class="src">Source: <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/output">output/</a> in this repo (MIT) — Go, and C for the shim.</div>
       </div>
     </div>
+    <div class="opt" id="stagetimerRow">
+      <input type="checkbox" id="optStagetimer">
+      <div>
+        <div class="t">Stagetimer <span class="beta">beta</span></div>
+        <div class="d">Puts a <a href="https://stagetimer.io">stagetimer.io</a> room on the HDMI
+          output: the speaker's countdown with its wrap-up colours, the rundown, both side by
+          side, or the time of day, live from the room. Run the show from Stagetimer's
+          Controller as usual; messages, flash, blackout and On Air follow it. Enter the room ID
+          and its API key on the tab and press <strong>SHOW ON HDMI</strong>.
+          <br>
+          The screens are drawn on the PLAY from the room's state, which Stagetimer's public API
+          sends live; there's no browser involved, so the room's logo and custom fonts and
+          colours aren't reproduced. The API key is kept on the PLAY, readable by root only, and
+          never shown back. Like the USB media player it <strong>takes the display</strong>: the
+          PLAY's decoder is stopped while the timer is shown, so NDI, the OSD and tally are gone
+          until you press <strong>STOP</strong>, at which point it's started again. A timer that
+          was on air comes back after a reboot. The PLAY needs to reach
+          <code>api.stagetimer.io</code>. Not affiliated with Stagetimer.
+          <br>
+          <strong>Why beta:</strong> it has <strong>not yet run on a PLAY</strong>. It has met
+          Stagetimer's real API only far enough to be refused with a made-up room, and its frames
+          have gone through the PLAY's own GStreamer version inside the PLAY's factory system
+          image, but the handover, the colours and the drawing speed on the hardware are still
+          open.
+          <br>
+          The API is on port 8096 and every change is gated on your birdUI login. Adds about
+          9 MB.
+          <br>
+          <label style="display:block;margin-top:6px;">
+            <input type="checkbox" id="optStagetimerUi" checked>
+            Add the <strong>Stagetimer</strong> tab to the web UI, beside the other tabs. Same
+            edit of <code>videoset.html</code>, marker-wrapped and backed up;
+            <code>bdstage --unpatch-ui</code> restores it, and the installer restarts
+            <code>BirdDogWebUI</code>, checks it came back as a new process, and rolls back if it
+            didn't. The tab is where the room is entered, so without it you'd drive the API on
+            port 8096 yourself.
+          </label>
+        </div>
+        <div class="src">Source: <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/stagetimer">stagetimer/</a> in this repo (MIT) — Go;
+          drawn in <a href="https://notofonts.github.io">Noto Sans</a> (SIL Open Font Licence).</div>
+      </div>
+    </div>
     <div class="opt">
       <input type="checkbox" id="optReboot">
       <div>
@@ -379,6 +421,12 @@
      <code>systemctl disable --now bd-out</code>, <code>systemctl try-restart BirdDogRunner</code>
      (so the decoder starts again without the shim), and
      <code>rm -rf /userdata/bd-out /etc/systemd/system/bd-out.service</code>.</p>
+  <p class="note">Stagetimer: press <strong>STOP</strong> on its tab first, so the PLAY's decoder
+     is started again, then
+     <code>/userdata/bd-stage/bdstage --unpatch-ui &amp;&amp; systemctl restart BirdDogWebUI</code>,
+     <code>systemctl disable --now bd-stage</code>, and
+     <code>rm -rf /userdata/bd-stage /etc/systemd/system/bd-stage.service</code>, which takes the
+     room's API key with it.</p>
   <p class="note">A custom module built from the template leaves its own
      <code>uninstall</code> beside its payload: <code>bash /userdata/bd-&lt;name&gt;/uninstall</code>.
      One without it is whatever its author documented — <code>/userdata/bd-modules.log</code>
@@ -395,7 +443,7 @@
        <code>pkgs.tailscale.com</code> and, for the streaming gateway, GitHub's release downloads
        of MediaMTX — neither serves a CORS header.</p>
     <p><strong>Read the installer before you run it.</strong> It runs as root on your device and
-       it is about 850 lines of commented bash — you should not take anyone's word for what it does:
+       it is about 950 lines of commented bash — you should not take anyone's word for what it does:
        <a href="https://github.com/stoatworks-labs/birddog-play-patcher/blob/main/installer/update">installer/update</a>.
        Source for the whole tool is at
        <a href="https://github.com/stoatworks-labs/birddog-play-patcher">github.com/stoatworks-labs/birddog-play-patcher</a>
@@ -410,9 +458,11 @@
        the streaming gateway in
        <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/gateway">gateway/</a>,
        the OMT receiver in
-       <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/omt">omt/</a>
-       and HDMI formats and area of interest in
-       <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/output">output/</a>.
+       <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/omt">omt/</a>,
+       HDMI formats and area of interest in
+       <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/output">output/</a>
+       and Stagetimer in
+       <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/stagetimer">stagetimer/</a>.
        Want to add your own? <a href="modules.html">Building a module</a> explains the format the
        installer runs, and
        <a href="https://github.com/stoatworks-labs/birddog-play-patcher/tree/main/module-template">module-template/</a>
@@ -435,6 +485,11 @@
        under the <a href="https://github.com/openmediatransport/libvmx/blob/main/LICENSE.txt">MIT
        licence</a>, © Open Media Transport Contributors; the licence travels in the package as
        <code>/userdata/bd-omt/LICENSE.libvmx</code>.</p>
+    <p>Choosing Stagetimer redistributes the <a href="https://notofonts.github.io">Noto Sans</a>
+       typeface, embedded in <code>bdstage</code>, under the
+       <a href="https://openfontlicense.org">SIL Open Font Licence 1.1</a>, © The Noto Project
+       Authors; the licence travels in the package as <code>/userdata/bd-stage/OFL.txt</code>.
+       Stagetimer is a trademark of its owners; <code>bdstage</code> only uses its public API.</p>
     <p>Choosing the USB media player also redistributes two more unmodified upstream binaries.
        <a href="https://pdfium.googlesource.com/pdfium/">PDFium</a> renders PDF pages, under the
        <a href="https://pdfium.googlesource.com/pdfium/+/refs/heads/main/LICENSE">BSD-3-Clause

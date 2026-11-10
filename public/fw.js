@@ -315,7 +315,7 @@ export const MODULE_VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,31}$/;
 // Names whose /userdata/bd-<name> or unit would collide with a built-in payload.
 export const RESERVED_MODULE_NAMES = new Set([
   'tailscale', 'tailscale-ui', 'kvm', 'cam', 'cam-api', 'play', 'probe', 'modules',
-  'gateway', 'gw', 'mtx', 'omt', 'output', 'out',
+  'gateway', 'gw', 'mtx', 'omt', 'output', 'out', 'stagetimer', 'stage',
 ]);
 // The updater extracts the whole package into a temp dir on the device before
 // running anything. 68 MB of Tailscale is proven; this is a ceiling, not a budget.
@@ -526,6 +526,9 @@ export const PACKAGE = [
 
   { id: 'bdout', option: 'output', label: 'bdout', asset: 'bdout-linux-arm64', src: 'output/dist/bdout-linux-arm64', member: './userdata/bd-out/bdout', mode: 0o755, required: true },
   { id: 'libbdout', option: 'output', label: 'libbdout.so', asset: 'libbdout.so', src: 'output/dist/libbdout.so', member: './userdata/bd-out/libbdout.so', mode: 0o755, required: true },
+
+  { id: 'bdstage', option: 'stagetimer', label: 'bdstage', asset: 'bdstage-linux-arm64', src: 'stagetimer/dist/bdstage-linux-arm64', member: './userdata/bd-stage/bdstage', mode: 0o755, required: true },
+  { id: 'stageFontLicense', option: 'stagetimer', asset: 'OFL.noto-sans.txt', src: 'stagetimer/fonts/OFL.txt', member: './userdata/bd-stage/OFL.txt', mode: 0o644, required: true },
 ];
 
 /** PACKAGE by id. */
@@ -545,6 +548,7 @@ export const OPTIONS = [
   { id: 'gateway', label: 'Streaming gateway', flag: 'WITH_GATEWAY', uiFlag: 'WITH_GATEWAY_UI', uiChoice: true, default: false },
   { id: 'omt', label: 'OMT receiver', flag: 'WITH_OMT', uiFlag: 'WITH_OMT_UI', uiChoice: true, default: false },
   { id: 'output', label: 'HDMI formats and area of interest', flag: 'WITH_OUTPUT', uiFlag: 'WITH_OUTPUT_UI', uiChoice: true, default: false },
+  { id: 'stagetimer', label: 'Stagetimer', flag: 'WITH_STAGETIMER', uiFlag: 'WITH_STAGETIMER_UI', uiChoice: true, default: false },
 ];
 
 /** The members one option adds, in pack order. */
@@ -559,7 +563,8 @@ export const packageName = (tag) => `BirdDog_PLAY-custom-${tag}.fw`;
 
 export function buildConf({
   tag, withTailscale, withTailscaleUi, withKvm, withPlay, withCam, withCamUi,
-  withGateway, withGatewayUi, withOmt, withOmtUi, withOutput, withOutputUi, withModules, doReboot,
+  withGateway, withGatewayUi, withOmt, withOmtUi, withOutput, withOutputUi,
+  withStagetimer, withStagetimerUi, withModules, doReboot,
 }) {
   return (
     `BUILD_TAG=${tag}\n` +
@@ -575,6 +580,8 @@ export function buildConf({
     `WITH_OMT_UI=${withOmt && withOmtUi ? 1 : 0}\n` +
     `WITH_OUTPUT=${withOutput ? 1 : 0}\n` +
     `WITH_OUTPUT_UI=${withOutput && withOutputUi ? 1 : 0}\n` +
+    `WITH_STAGETIMER=${withStagetimer ? 1 : 0}\n` +
+    `WITH_STAGETIMER_UI=${withStagetimer && withStagetimerUi ? 1 : 0}\n` +
     `WITH_MODULES=${withModules ? 1 : 0}\n` +
     `DO_REBOOT=${doReboot ? 1 : 0}\n`
   );

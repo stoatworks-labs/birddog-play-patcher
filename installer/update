@@ -35,6 +35,8 @@ WITH_OMT="${WITH_OMT:-0}"
 WITH_OMT_UI="${WITH_OMT_UI:-0}"
 WITH_OUTPUT="${WITH_OUTPUT:-0}"
 WITH_OUTPUT_UI="${WITH_OUTPUT_UI:-0}"
+WITH_STAGETIMER="${WITH_STAGETIMER:-0}"
+WITH_STAGETIMER_UI="${WITH_STAGETIMER_UI:-0}"
 WITH_MODULES="${WITH_MODULES:-0}"
 DO_REBOOT="${DO_REBOOT:-0}"
 
@@ -666,6 +668,108 @@ if [ "${OUT_INSTALLED:-0}" = 1 ] && [ "$WITH_OUTPUT_UI" = 1 ] && [ -x /userdata/
   fi
 fi
 
+# --------------------------------------------------------------- Stagetimer
+# bdstage puts a stagetimer.io room on HDMI: the room's live feed from
+# Stagetimer's public API, drawn on the device as a countdown, the rundown,
+# both side by side, or a clock, with the room's messages, flash and blackout.
+# Like bdplay and bdomt it takes the display by stopping BirdDogRunner and
+# starts it again whenever it lets go. Source: stagetimer/ in
+# github.com/stoatworks-labs/birddog-play-patcher.
+if [ "$WITH_STAGETIMER" = 1 ] && [ -d "$SDIR/userdata/bd-stage" ]; then
+  NEED_KB=$(du -sk "$SDIR/userdata/bd-stage" | awk '{print $1}')
+  if [ -n "$FREE_KB" ] && [ "$FREE_KB" -lt $((NEED_KB + 20480)) ]; then
+    log "SKIPPING Stagetimer: needs ${NEED_KB} KB + 20 MB headroom, only ${FREE_KB} KB free"
+  else
+    log "installing Stagetimer (${NEED_KB} KB) to /userdata/bd-stage"
+    # Stopped first: a running bdstage may hold the display, and stopping it
+    # is what hands HDMI back. It takes the display again after the update if
+    # the timer was showing (it waits for the decoder to be up first).
+    systemctl stop bd-stage 2>/dev/null
+    mkdir -p /userdata/bd-stage
+    cp -f "$SDIR/userdata/bd-stage/bdstage" /userdata/bd-stage/bdstage.new
+    mv -f /userdata/bd-stage/bdstage.new /userdata/bd-stage/bdstage
+    chmod 755 /userdata/bd-stage/bdstage
+    # The fonts bdstage draws with are Noto Sans, under the SIL Open Font
+    # Licence, which travels with them.
+    [ -f "$SDIR/userdata/bd-stage/OFL.txt" ] && cp -f "$SDIR/userdata/bd-stage/OFL.txt" /userdata/bd-stage/
+    chown -R root:root /userdata/bd-stage
+    # config.json is never shipped: it holds the room's Stagetimer API key, so
+    # bdstage writes it 0600, and an existing one survives a reinstall. A copy
+    # put back by hand is set right here.
+    [ -f /userdata/bd-stage/config.json ] && chmod 600 /userdata/bd-stage/config.json
+
+    # 8096 because 8080 is BirdDog's API, 8090 bd-cam-api, 8091 bd-play, 8092
+    # bd-tailscale-ui, 8093 bd-gw, 8094 bd-omt and 8095 bd-out.
+    #
+    # ExecStopPost is bdomt's with reset-failed added: PPApp aborts in its own
+    # teardown often enough that BirdDogRunner can be rate-limited, and then a
+    # plain start is refused and HDMI stays dark. KillMode=mixed sends SIGTERM
+    # to bdstage alone, which stops its gst-launch in order and gives the
+    # display back; anything left after TimeoutStopSec is killed.
+    cat > /etc/systemd/system/bd-stage.service <<'EOF'
+[Unit]
+Description=BirdDog PLAY Stagetimer on HDMI (custom)
+After=network-online.target BirdDogWebUI.service
+Wants=network-online.target
+# Deliberately NOT After/Requires BirdDogRunner: bdstage stops and starts that
+# unit itself when it takes the display, and a dependency would make systemd
+# fight it.
+
+[Service]
+Type=simple
+WorkingDirectory=/userdata/bd-stage
+ExecStart=/userdata/bd-stage/bdstage --serve :8096 --dir /userdata/bd-stage
+# bdstage gives HDMI back on every exit it sees. The one it cannot see is
+# being killed, so while it holds the display /run/bdstage-took-display
+# exists, and this puts the PLAY's decoder back if the marker is still there.
+ExecStopPost=-/bin/sh -c 'if [ -e /run/bdstage-took-display ]; then rm -f /run/bdstage-took-display; systemctl reset-failed BirdDogRunner; systemctl --no-block start BirdDogRunner; fi'
+Restart=always
+RestartSec=10
+KillMode=mixed
+TimeoutStopSec=20
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    log "Stagetimer unit written (bd-stage)"
+    STAGE_INSTALLED=1
+  fi
+fi
+
+# ------------------------------------------------- web UI "Stagetimer" tab
+# videoset.html again, with bdstage's markers and the same anchors as the
+# other tabs; the patch is unit tested in the patcher's stagetimer/. An
+# existing tab only has its script refreshed, so the web UI is restarted
+# (and health checked) only when the page itself changes.
+if [ "${STAGE_INSTALLED:-0}" = 1 ] && [ "$WITH_STAGETIMER_UI" = 1 ] && [ -x /userdata/bd-stage/bdstage ]; then
+  WEBUI_UNIT=BirdDogWebUI
+  if ! systemctl cat "$WEBUI_UNIT" >/dev/null 2>&1; then
+    log "WARNING: no $WEBUI_UNIT unit on this firmware — skipping the Stagetimer tab"
+  elif grep -q 'bdstage-stagetimer-tab:start' /srv/birddog-web-ui/videoset.html 2>/dev/null; then
+    /userdata/bd-stage/bdstage --patch-ui --ui-dir /srv/birddog-web-ui --api-port 8096 >> /tmp/bd-custom-install.log 2>&1
+    log "Stagetimer tab already present — its script refreshed"
+  elif /userdata/bd-stage/bdstage --patch-ui --ui-dir /srv/birddog-web-ui --api-port 8096 >> /tmp/bd-custom-install.log 2>&1; then
+    PID_BEFORE=$(pidof birddog-web-ui 2>/dev/null | awk '{print $1}')
+    log "AV Setup page patched; restarting $WEBUI_UNIT (was pid ${PID_BEFORE:-none})"
+    systemctl restart "$WEBUI_UNIT" 2>/dev/null
+    sleep 5
+    PID_AFTER=$(pidof birddog-web-ui 2>/dev/null | awk '{print $1}')
+    CODE=$(curl -s -o /dev/null -m 8 -w '%{http_code}' http://127.0.0.1/login 2>/dev/null || echo 000)
+    if [ -n "$PID_AFTER" ] && [ "$PID_AFTER" != "$PID_BEFORE" ] && { [ "$CODE" = 200 ] || [ "$CODE" = 302 ] || [ "$CODE" = 301 ]; }; then
+      log "web UI healthy after patch (pid ${PID_BEFORE:-none} -> $PID_AFTER, HTTP $CODE) — Stagetimer tab is live"
+    else
+      log "WARNING: web UI unhealthy after patching (pid ${PID_BEFORE:-none} -> ${PID_AFTER:-none}, HTTP $CODE) — ROLLING BACK"
+      /userdata/bd-stage/bdstage --unpatch-ui --ui-dir /srv/birddog-web-ui >> /tmp/bd-custom-install.log 2>&1
+      systemctl restart "$WEBUI_UNIT" 2>/dev/null
+      sleep 5
+      log "after rollback: HTTP $(curl -s -o /dev/null -m 8 -w '%{http_code}' http://127.0.0.1/login 2>/dev/null || echo 000); page as found also at /srv/birddog-web-ui/videoset.html.bdstage-stock"
+    fi
+  else
+    log "WARNING: could not patch the AV Setup page — left untouched"
+  fi
+fi
+
 # -------------------------------------------------------------------- rootfs
 if [ -d "$SDIR/files" ]; then
   log "copying rootfs overlay"
@@ -790,6 +894,11 @@ if [ -f /etc/systemd/system/bd-out.service ]; then
   systemctl restart bd-out.service 2>/dev/null && log "bd-out started on :8095" \
     || log "WARNING: bd-out failed to start — check 'journalctl -u bd-out'"
 fi
+if [ -f /etc/systemd/system/bd-stage.service ]; then
+  systemctl enable bd-stage.service 2>/dev/null
+  systemctl restart bd-stage.service 2>/dev/null && log "bd-stage started on :8096" \
+    || log "WARNING: bd-stage failed to start — check 'journalctl -u bd-stage'"
+fi
 
 # --------------------------------------------------- restore stock services
 # /bin/birddog-update-wrapper does `systemctl stop BirdDogRunner` before calling
@@ -841,6 +950,11 @@ fi
 if [ "${OUT_INSTALLED:-0}" = 1 ]; then
   log "HDMI formats and area of interest: the Output tab of AV Setup (or :8095/api/status)"
   log "  a format is tried first and goes back in 30 s unless kept; bdout --reset forgets both"
+fi
+
+if [ "${STAGE_INSTALLED:-0}" = 1 ]; then
+  log "Stagetimer: enter the room ID and API key on the Stagetimer tab of AV Setup, then Show (or :8096/api/status)"
+  log "  showing the timer stops the PLAY's own decoder until Stop is pressed"
 fi
 
 if [ "$DO_REBOOT" = 1 ]; then

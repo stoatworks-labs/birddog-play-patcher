@@ -24,11 +24,12 @@ your warranty any favours.
 
 The installer scripts and, in `assets/`, `bdts-linux-arm64`, `bdkvm-linux-arm64`,
 `bdcam-linux-arm64`, `bdplay-linux-arm64`, `bdpdf-linux-arm64`, `bdgw-linux-arm64`,
-`bdomt-linux-arm64`, `bdout-linux-arm64` and `libbdout.so` come from
+`bdomt-linux-arm64`, `bdout-linux-arm64`, `libbdout.so` and `bdstage-linux-arm64` come from
 <https://github.com/stoatworks-labs/birddog-play-patcher>, under the MIT licence in
 `NOTICES/birddog-play-patcher-LICENSE`. The binaries are the ones committed in that repo's
 `*/dist/` folders at the commit `kit.json` names, and their source sits beside them:
-`tailscale-ui/`, `agent/`, `converter/`, `player/`, `gateway/`, `omt/` and `output/`.
+`tailscale-ui/`, `agent/`, `converter/`, `player/`, `gateway/`, `omt/`, `output/` and
+`stagetimer/`.
 
 ## libvmx
 
@@ -38,6 +39,13 @@ Open Media Transport uses, built from the upstream commit named in
 with one patch (an NV12 output, `omt/vmx/libvmx-decode-nv12.patch`) by `omt/vmx/build-libvmx.sh`.
 MIT, © Open Media Transport Contributors. The licence is `assets/LICENSE.libvmx`, and the page
 packs it beside the library as `/userdata/bd-omt/LICENSE.libvmx`.
+
+## Noto Sans
+
+`assets/bdstage-linux-arm64` embeds [Noto Sans](https://notofonts.github.io) Regular and Bold,
+unmodified, from `stagetimer/fonts/`. SIL Open Font License 1.1, © The Noto Project Authors. The
+licence is `assets/OFL.noto-sans.txt`, and the page packs it beside the binary as
+`/userdata/bd-stage/OFL.txt`.
 
 ## PDFium
 

@@ -40,6 +40,7 @@ converter/       bdcam, the UVC converter — Go source and dist/
 gateway/         bdgw, the streaming gateway panel — Go source and dist/
 omt/             bdomt, the OMT receiver — Go source, the libvmx patch and build, and dist/
 output/          bdout + libbdout.so, HDMI formats and area of interest — Go, the C shim, and dist/
+stagetimer/      bdstage, a stagetimer.io room on HDMI — Go source, the fonts, and dist/
 tailscale-ui/    bdts, the birdUI Tailscale panel — Go source and dist/
 module-template/ a working third-party module; CI proves fw.js accepts it
 test/            builds a package in Node using public/fw.js; modules.mjs reads archives
@@ -63,8 +64,9 @@ agent binary in `agent/dist/`. `public/assets/` is generated from both and is gi
 there is no second copy to drift.
 
 The other on-device programs are **developed here**: `player/`, `converter/`, `gateway/` and
-`tailscale-ui/` were their own public repos until 2026-10-11 and came in with their history
-(`git subtree` merges, so `git subtree split --prefix=<dir>` recovers each). Each folder is
+`tailscale-ui/` were their own public repos until 2026-10-11, and `stagetimer/` until
+2026-11-10; each came in with its history (`git subtree` merges, so
+`git subtree split --prefix=<dir>` recovers each). Each folder is
 its own Go module with its own `go.mod`, `build.sh`, `AGENTS.md` and `docs/`; read that
 folder's `AGENTS.md` before changing it. Its `build.sh` writes `<dir>/dist/<name>-linux-arm64`,
 which is the committed binary build-assets.sh stages — so a source change ships only when

@@ -216,6 +216,7 @@ firmware packager fetches it, and its BSD-3 notice obligation is carried there.
 | 8093 | `bd-gw` — the streaming gateway's Streaming tab |
 | 8094 | `bd-omt` — the OMT receiver's OMT tab |
 | 8095 | `bd-out` — HDMI formats and area of interest's Output tab |
+| 8096 | `bd-stage` — Stagetimer's tab |
 | 1935, 8554, 8888, 8889, 8890/udp | the streaming gateway's MediaMTX (full list in [`gateway/README.md`](../gateway/README.md#ports)) |
 
 8092 was picked to avoid the three that were already taken; 8091 in particular is bdplay's

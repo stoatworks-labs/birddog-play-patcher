@@ -23,6 +23,7 @@ tailscale-ui/build.sh            # vet, test, check the panel script, rebuild bd
 omt/vmx/build-libvmx.sh [host]   # the patched libvmx: omt/dist/libvmx.so (zig), or a host copy for the tests
 omt/build.sh                     # vet, test, check the tab script, rebuild bdomt into omt/dist/ (zig, glibc 2.28)
 output/build.sh                  # shim + Go tests, the tab script, then bdout + libbdout.so into output/dist/ (zig, glibc 2.28)
+stagetimer/build.sh              # gofmt, vet, test, the tab script, then bdstage into stagetimer/dist/ (no cgo, no zig)
 module-template/build.sh && node module-template/scripts/patcher-accepts.mjs module-template/dist/*.tgz
 ```
 

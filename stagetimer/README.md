@@ -1,4 +1,4 @@
-# bd-play-stagetimer
+# bdstage: Stagetimer on the BirdDog PLAY
 
 > **AI-assisted project.** This codebase was created with [Claude](https://claude.com/claude-code)
 > (Anthropic), directed and reviewed by a human author. **It has not run on a
@@ -10,9 +10,11 @@
 The speaker's countdown, the rundown, both side by side, or the time of day —
 live from the room, set up from the PLAY's own web interface.
 
-It is a module for the [PLAY Patcher](https://birddog-play-patcher.stoatworks-labs.com):
-it installs on BirdDog's stock firmware, alongside everything else, and comes off
-again with one command. Stop it and the PLAY is an NDI decoder again.
+Installed by the [BirdDog PLAY Patcher](https://birddog-play-patcher.stoatworks-labs.com) as
+its *Stagetimer* option, or by `birddog-re`'s `fwbuild --with-stagetimer`, on BirdDog's stock
+firmware alongside everything else. Press **STOP** and the PLAY is an NDI decoder again. The
+how-to is in [docs/USER-GUIDE.md](docs/USER-GUIDE.md). Until 2026-11-10 this was its own
+repository, bd-play-stagetimer, loaded as a custom module.
 
 Not affiliated with Stagetimer.
 
@@ -31,7 +33,7 @@ GStreamer's `kmssink` once the PLAY's own decoder has handed the display over.
   locally between them, corrected for the PLAY's clock being off.
 - **Light.** The picture is redrawn only when something on it changes — once a
   second for a running countdown — and a frame that has not changed is never
-  sent again. No browser, no Chromium: the module is under 4 MB.
+  sent again. No browser, no Chromium: one 9 MB binary, under 4 MB in the package.
 - **Resilient.** If a venue network blocks WebSockets it reads the room over
   HTTP instead. If Stagetimer is unreachable the countdown keeps running from
   the last state, with a small "Reconnecting" mark.
@@ -58,23 +60,43 @@ heavier thing than this, and not something this module does.
 
 ## Install
 
-1. Build the module (below), or take `stagetimer-<version>.tgz` from a release.
-2. Open the [PLAY Patcher](https://birddog-play-patcher.stoatworks-labs.com), add
-   the `.tgz` under **Custom modules**, build the package, and upload the `.fw`
-   on the PLAY's firmware page.
-3. Log in to the PLAY's web interface and open **AV Setup → Stagetimer**.
-4. In Stagetimer, open the room's **Controller**, then the menu → **API**: copy
+1. Tick **Stagetimer** in the [PLAY Patcher](https://birddog-play-patcher.stoatworks-labs.com)
+   (and leave **Add the Stagetimer tab** ticked), build the package, and upload
+   the `.fw` on the PLAY's firmware page.
+2. Log in to the PLAY's web interface and open **AV Setup → Stagetimer**.
+3. In Stagetimer, open the room's **Controller**, then the menu → **API**: copy
    the room ID and the API key into the tab. **TEST** checks them without
    saving. **APPLY**, then **SHOW ON HDMI**.
 
 The tab previews what the screen shows — or would show, before you take the
 PLAY's output away from its decoder.
 
-To take the module off again:
+To take it off again, press **STOP** first, then over SSH:
 
 ```bash
-ssh -p 9031 root@<unit> bash /userdata/bd-stagetimer/uninstall
+/userdata/bd-stage/bdstage --unpatch-ui && systemctl restart BirdDogWebUI
+systemctl disable --now bd-stage
+rm -rf /userdata/bd-stage /etc/systemd/system/bd-stage.service
 ```
+
+`config.json` goes with the folder, and with it the room's API key.
+
+## What is installed
+
+```
+/userdata/bd-stage/bdstage          this program (9 MB, static Go, no cgo)
+/userdata/bd-stage/OFL.txt          the SIL Open Font Licence of the Noto Sans it draws with
+/userdata/bd-stage/config.json      the room, the key and the screen options; written 0600 by
+                                    bdstage, never shipped, kept across reinstalls
+/etc/systemd/system/bd-stage.service  bdstage --serve :8096 --dir /userdata/bd-stage
+```
+
+One unit. It runs the API whether or not anything is on screen, so the tab can always say what
+is going on. The **Stagetimer** tab is added to `/srv/birddog-web-ui/videoset.html` with the
+same anchors the UVC Converter, Streaming, OMT and Output tabs use, so they coexist in whichever
+order they went in; the page is backed up first as `videoset.html.bdstage-stock`. The installer
+block itself is developed in `birddog-re`'s fwbuild payload and reaches the patcher's
+`installer/update` by `scripts/sync-from-re.sh`.
 
 While the timer is on HDMI the PLAY's own decoder is stopped, so its NDI
 decoding, OSD and tally are gone until you press **STOP**. After a reboot or a
@@ -97,12 +119,14 @@ HDMI" if you do not want that).
 ## Build
 
 ```bash
-./build.sh                     # vet, tests, tab syntax, aarch64 build, check.sh -> dist/stagetimer-<version>.tgz
-node scripts/patcher-accepts.mjs dist/stagetimer-*.tgz
+./build.sh                     # gofmt, vet (host and arm64), tests, tab syntax -> dist/bdstage-linux-arm64
+go test -race ./...
 ```
 
 Any machine with Go 1.26 builds it: `bdstage` is static Go with no cgo, with the
-fonts and the tab script inside the binary.
+fonts and the tab script inside the binary. `dist/bdstage-linux-arm64` is
+committed, and it is what the page serves: a source change ships only when
+someone rebuilds it and commits the binary.
 
 ### Trying it without a PLAY or a Stagetimer account
 
@@ -126,15 +150,16 @@ Controller.
 | The **feed**: live events, the rundown re-read after edits, reconnecting, falling back to HTTP when WebSockets are blocked, the countdown carrying on while offline, the clock offset | Unit tests against `internal/mockstage`, a mock Stagetimer speaking the same HTTP and Socket.IO (it drops a client that does not answer pings) |
 | The **screens**: every view, phase, appearance, message, flash, blackout, mirror; at most one redraw a second while counting | Unit tests and the demo renders; an end-to-end run against the mock with the frames looked at |
 | **Video** on the PLAY's **stock Debian 10 rootfs** | **Verified in a chroot** of the factory `PLAY_1.0.30.img` (GStreamer 1.14.4): bdstage's real pipeline — `fdsrc ! rawvideoparse` as 1080p NV12 — took every frame bdstage wrote, and GStreamer's own BT.709 conversion gave the colours back within 4/255. `kmssink` was swapped for a PNG writer there (`tools/verify-stock.sh`) |
-| The **Stagetimer tab** | Unit-tested against BirdDog's real 1.0.32 and 1.0.34 AV Setup pages: inserted, still parses, removed exactly, coexists with the UVC, Streaming, OMT and Signage tabs. Driven in a browser against the daemon, under birdUI's own stylesheets |
-| The **module archive** | Accepted by the patcher's own reader (`scripts/patcher-accepts.mjs`) |
-| The **installer** | Syntax-checked only, not run. Its tab health check and rollback are the pattern bdcam and bdts use |
+| The **Stagetimer tab** | Unit-tested against BirdDog's real 1.0.32 and 1.0.34 AV Setup pages: inserted, still parses, removed exactly, coexists with the UVC, Streaming, OMT, Output and Signage tabs. Driven in a browser against the daemon, under birdUI's own stylesheets |
+| The **package** | The patcher's own test builds it with every option and checks the members, modes and installer guards; the page builds it in a browser |
+| The **installer** | **Run in a chroot** of the factory `PLAY_1.0.30.img` with `systemctl`, `pidof` and `curl` stubbed: it installs the binary (0755), `OFL.txt` (0644) and the unit, adds the tab to the 1.0.30 page with a backup, and starts `bd-stage`. A reinstall refreshes the tab's script without touching the page and puts a hand-made `config.json` back to 0600. With the web UI made to fail its health check it puts the page back byte for byte. The unit's `ExecStopPost` restarts `BirdDogRunner` only while bdstage's marker is there |
 | **On a PLAY** | **Not yet.** The handover from BirdDog's decoder, `kmssink` on the RK3328's display controller (and whether it reads NV12 as BT.709), 4K outputs, the login gate against a real birdUI, the install through the patcher, and how long a frame takes on four Cortex-A53s |
 
 The hardware checklist is in [docs/NOTES.md](docs/NOTES.md#on-a-play).
 
 ## Licence
 
-MIT — see `LICENSE`. Noto Sans is under the SIL Open Font License (`fonts/OFL.txt`).
+MIT — see `LICENSE`. Noto Sans is under the SIL Open Font License (`fonts/OFL.txt`); the
+patcher packs that licence beside the binary as `/userdata/bd-stage/OFL.txt`.
 Stagetimer is a trademark of its owners; this project uses its public API and is
 not affiliated with it.

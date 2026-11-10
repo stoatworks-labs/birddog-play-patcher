@@ -57,11 +57,12 @@ const syntheticVideoset = `{{template "layout.html" .}}
 </script>
 {{end}}`
 
-// bdcamPatched, bdgwPatched, bdomtPatched and bdsignPatched are the page after
-// the patcher's UVC Converter, Streaming and OMT tabs and bd-play-signage's
-// Signage tab have been applied — their markers and anchors are reproduced
-// from converter/patch.go, gateway/patch.go, omt/patch.go and signage's
-// patch.go, so this test breaks if any of them changes how it anchors.
+// bdcamPatched, bdgwPatched, bdomtPatched, bdoutPatched and bdsignPatched are
+// the page after the patcher's UVC Converter, Streaming, OMT and Output tabs
+// and bd-play-signage's Signage tab have been applied — their markers and
+// anchors are reproduced from converter/patch.go, gateway/patch.go,
+// omt/patch.go, output/patch.go and signage's patch.go, so this test breaks if
+// any of them changes how it anchors.
 func bdcamPatched(src string) string {
 	return otherTab(src, "<!-- bdcam-uvc-tab:start -->", "<!-- bdcam-uvc-tab:end -->", "tab_uvc", "uvc_form", "UVC Converter", "uvc-converter.js")
 }
@@ -72,6 +73,10 @@ func bdgwPatched(src string) string {
 
 func bdomtPatched(src string) string {
 	return otherTab(src, "<!-- bdomt-omt-tab:start -->", "<!-- bdomt-omt-tab:end -->", "tab_bdomt", "bdomt_form", "OMT", "bdomt-tab.js")
+}
+
+func bdoutPatched(src string) string {
+	return otherTab(src, "<!-- bdout-output-tab:start -->", "<!-- bdout-output-tab:end -->", "tab_bdout", "bdout_form", "Output", "bdout-tab.js")
 }
 
 func bdsignPatched(src string) string {
@@ -91,7 +96,7 @@ func pages(t *testing.T) map[string]string {
 		"synthetic/stock":              syntheticVideoset,
 		"synthetic/bdcam-applied":      bdcamPatched(syntheticVideoset),
 		"synthetic/bdcam-bdgw-applied": bdgwPatched(bdcamPatched(syntheticVideoset)),
-		"synthetic/all-others-applied": bdsignPatched(bdomtPatched(bdgwPatched(bdcamPatched(syntheticVideoset)))),
+		"synthetic/all-others-applied": bdsignPatched(bdoutPatched(bdomtPatched(bdgwPatched(bdcamPatched(syntheticVideoset))))),
 	}
 	matches, _ := filepath.Glob("testdata/firmware/videoset.*.html")
 	for _, m := range matches {
@@ -101,7 +106,7 @@ func pages(t *testing.T) map[string]string {
 		}
 		name := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(m), "videoset."), ".html")
 		out["firmware/"+name] = string(b)
-		out["firmware/"+name+"/others-applied"] = bdsignPatched(bdomtPatched(bdcamPatched(string(b))))
+		out["firmware/"+name+"/others-applied"] = bdsignPatched(bdoutPatched(bdomtPatched(bdcamPatched(string(b)))))
 	}
 	if len(matches) == 0 {
 		t.Log("no real firmware pages in testdata/firmware/ — testing the synthetic page only. " +
@@ -164,15 +169,15 @@ func TestPatchCoexistsWithTheOtherTabsInAnyOrder(t *testing.T) {
 		}
 		return out
 	}
-	others := func(s string) string { return bdsignPatched(bdomtPatched(bdgwPatched(bdcamPatched(s)))) }
+	others := func(s string) string { return bdsignPatched(bdoutPatched(bdomtPatched(bdgwPatched(bdcamPatched(s))))) }
 	orders := map[string]string{
 		"others-us":   ours(others(stock)),
 		"us-others":   others(ours(stock)),
-		"bdcam-us-gw": bdsignPatched(bdomtPatched(bdgwPatched(ours(bdcamPatched(stock))))),
+		"bdcam-us-gw": bdsignPatched(bdoutPatched(bdomtPatched(bdgwPatched(ours(bdcamPatched(stock)))))),
 	}
 	for name, page := range orders {
-		for _, id := range []string{`id="tab_uvc"`, `id="tab_bdgw"`, `id="tab_bdomt"`, `id="tab_bdsign"`, `id="tab_bdstage"`,
-			`id="uvc_form"`, `id="bdgw_form"`, `id="bdomt_form"`, `id="bdsign_form"`, `id="bdstage_form"`} {
+		for _, id := range []string{`id="tab_uvc"`, `id="tab_bdgw"`, `id="tab_bdomt"`, `id="tab_bdout"`, `id="tab_bdsign"`, `id="tab_bdstage"`,
+			`id="uvc_form"`, `id="bdgw_form"`, `id="bdomt_form"`, `id="bdout_form"`, `id="bdsign_form"`, `id="bdstage_form"`} {
 			if strings.Count(page, id) != 1 {
 				t.Fatalf("%s: %s appears %d times, want 1", name, id, strings.Count(page, id))
 			}
@@ -182,7 +187,7 @@ func TestPatchCoexistsWithTheOtherTabsInAnyOrder(t *testing.T) {
 		if strings.Contains(got, patchStart) {
 			t.Fatalf("%s: our markers survived unpatch", name)
 		}
-		for _, m := range []string{"bdcam-uvc-tab:start", "bdgw-streaming-tab:start", "bdomt-omt-tab:start", "bdsign-signage-tab:start"} {
+		for _, m := range []string{"bdcam-uvc-tab:start", "bdgw-streaming-tab:start", "bdomt-omt-tab:start", "bdout-output-tab:start", "bdsign-signage-tab:start"} {
 			if strings.Count(got, m) != 2 {
 				t.Fatalf("%s: unpatch touched another module's tab (%s)", name, m)
 			}

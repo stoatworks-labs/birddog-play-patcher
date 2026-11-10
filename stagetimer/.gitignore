@@ -1,6 +1,6 @@
-.claude/
+# dist/ is COMMITTED here: the patcher ships bdstage from stagetimer/dist/.
 .DS_Store
-dist/
-*.tgz
-payload/bin/
+
+# BirdDog's own AV Setup pages, copied off a device for the patch tests. They
+# are BirdDog's, so they are never committed.
 testdata/firmware/
