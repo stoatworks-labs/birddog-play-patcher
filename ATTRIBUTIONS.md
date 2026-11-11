@@ -50,6 +50,36 @@ Not vendored. The repo carries the upstream commit it is pinned to and one patch
 
 Open Media Transport's video is VMX, and libvmx is that codec's reference library. The OMT receiver loads it at run time and decodes each frame straight to NV12, the one layout the PLAY's display sink accepts, so the receiver needs no codec of its own.
 
+### PDFium
+
+<https://pdfium.googlesource.com/pdfium/>  
+Licence: BSD-3-Clause and Apache-2.0 (its LICENSE carries both)  
+Copyright: The PDFium Authors (Copyright 2014)
+
+Not vendored and not built here. The prebuilt linux-arm64 libpdfium.so from one release of bblanchon/pdfium-binaries is committed unmodified and placed inside the package the user downloads, beside the PDF renderer that links it. That build compiles in its own copies of FreeType (FreeType License), ICU (Unicode License v3), libjpeg-turbo (IJG, BSD-3-Clause and zlib), OpenJPEG (BSD-2-Clause), libpng (PNG Reference Library License v2), libtiff (the libtiff licence), Little CMS, fast_float and simdutf (MIT), zlib (zlib), Abseil (Apache-2.0), LLVM's libc (Apache-2.0 with LLVM Exceptions) and Anti-Grain Geometry 2.3 (its own permissive notice), none of them copyleft. The release's licence directory, with each of those texts and the build's own MIT licence (Benoit Blanchon, Copyright 2014-2025), is committed in the repo and travels with its release kit.
+
+It turns each page of a PDF on a USB stick into a still the media player can put on HDMI, so a deck exported to PDF plays like slides. It is permissive where MuPDF is AGPL, small enough to be served by the web patcher, and the prebuilt library needs nothing the stock firmware lacks: it asks for glibc 2.17 against the device's 2.28 and carries its own C++ runtime.
+
+### fuse-exfat
+
+<https://github.com/relan/exfat>  
+Licence: GPL-2.0-or-later  
+Copyright: Andrew Nayenko (Copyright (C) 2010-2018)
+
+Not vendored. A build script run by hand fetches the upstream release tarball, builds it unmodified and links it statically, with libfuse, into a single mount.exfat-fuse binary, which is committed and placed inside the package the user downloads, beside the media player that runs it. That is a binary redistribution of GPL code, so its corresponding source is offered: the build script names the exact release tarball, version and flags it was built from, and the GPL's text is committed in the repo and travels with its release kit. The player only executes the helper as a separate program, so the player itself is not a derived work and keeps its own licence.
+
+The PLAY's kernel has no exFAT driver and no loadable modules, but it does have FUSE, so exFAT can be mounted entirely in user space and the OS image is never touched. Without it, a stick formatted exFAT does not mount at all.
+
+### libfuse
+
+<https://github.com/libfuse/libfuse>  
+Licence: LGPL-2.1  
+Copyright: Miklos Szeredi (Copyright (C) 2001-2007) and the libfuse contributors
+
+Not vendored. The 2.x release tarball is fetched by the same build script as fuse-exfat, built unmodified as a static library and linked into the mount.exfat-fuse binary placed inside the package the user downloads. That is a redistribution of LGPL code inside a statically linked program, so its corresponding source is offered the same way: the build script names the exact tarball, version and flags, and COPYING.LIB is committed in the repo and travels with its release kit.
+
+The FUSE library fuse-exfat is written against. The device has neither libfuse nor fusermount, so the library is linked in, and libfuse 2.x tries the mount(2) system call before it falls back to fusermount; the player runs as root, so that call succeeds and no helper has to be shipped beside it.
+
 ### purego
 
 <https://github.com/ebitengine/purego>  
