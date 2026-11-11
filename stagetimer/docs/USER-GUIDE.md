@@ -58,10 +58,12 @@ again. After a reboot or a firmware update the timer comes back on its own; unti
 timer back on HDMI** if you'd rather it didn't.
 
 What it follows from the room: the selected timer and its start, finish and pause; count-up,
-time-of-day and hidden timers; the yellow and red wrap-up colours, and overtime with a minus
+time-of-day and hidden timers; the yellow and red wrap-up colours, and overtime with a plus
 sign; messages, in their colour (a focus message fills the screen); **Flash**, which inverts
 the screen; **Blackout**; and **On Air**. What it doesn't draw: the room's logo and Stagetimer's
-custom fonts and colours.
+custom fonts and colours. The room's **Time Formatting** and **Overtime** settings aren't in
+Stagetimer's API either, so the PLAY always draws the defaults: a room set to a minus prefix,
+or to stop at 0:00, still counts on as +0:01, +0:02… on HDMI.
 
 If the PLAY loses Stagetimer, the countdown carries on from what it last knew, with a small
 "Reconnecting" mark in the corner until the room is back.

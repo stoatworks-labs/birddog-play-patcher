@@ -14,10 +14,11 @@ func TestFormatCountdown(t *testing.T) {
 		time.Millisecond:                  "0:01",
 		0:                                 "0:00",
 		-500 * time.Millisecond:           "0:00", // the second at zero
-		-time.Second:                      "-0:01",
-		-61 * time.Second:                 "-1:01",
+		-time.Second:                      "+0:01",
+		-1900 * time.Millisecond:          "+0:01", // overtime rounds down
+		-61 * time.Second:                 "+1:01",
 		time.Hour + 2*time.Minute + 3*time.Second: "1:02:03",
-		-(time.Hour + time.Second):                "-1:00:01",
+		-(time.Hour + time.Second):                "+1:00:01",
 	}
 	for d, want := range cases {
 		if got := FormatCountdown(d); got != want {

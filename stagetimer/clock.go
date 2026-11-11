@@ -7,8 +7,8 @@ package main
 // and finish − pause while stopped. A countdown shows whole seconds rounded
 // up, so a ten-minute timer reads 10:00 for its first second and 0:01 for its
 // last, then 0:00 for one second at zero, then counts the overtime up with a
-// minus sign. The wrap-up colours come from the timer's own thresholds,
-// in seconds before the end.
+// plus sign, as a room does by default. The wrap-up colours come from the
+// timer's own thresholds, in seconds before the end.
 
 import (
 	"fmt"
@@ -144,7 +144,11 @@ func clamp01(f float64) float64 {
 }
 
 // FormatCountdown shows remaining time: whole seconds rounded up while there
-// is time left, and the overtime with a minus once there is not.
+// is time left, and the overtime, rounded down, with a plus once there is not.
+// That is a room's default look (Room Settings ▸ Overtime ▸ Prefix, "Plus
+// (+0:01)"); the prefix, like the rest of a room's Time Formatting and
+// Overtime settings, is not in the API, so a room set to Minus still reads +
+// here.
 func FormatCountdown(d time.Duration) string {
 	if d > 0 {
 		secs := int64((d + time.Second - 1) / time.Second)
@@ -154,7 +158,7 @@ func FormatCountdown(d time.Duration) string {
 	if over == 0 {
 		return hms(0)
 	}
-	return "-" + hms(over)
+	return "+" + hms(over)
 }
 
 // FormatCountUp shows elapsed time, rounded down.

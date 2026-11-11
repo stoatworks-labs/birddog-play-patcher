@@ -16,7 +16,21 @@ There is no countdown in the API. `get_status` and the socket's
 `playback_status` give `start`, `finish` and `pause` as Unix milliseconds on
 the server's clock, and the client counts: remaining is `finish − now` while
 running, `finish − pause` while stopped. A countdown reads whole seconds
-rounded up, 0:00 for the second at zero, then the overtime with a minus.
+rounded up, 0:00 for the second at zero, then the overtime in whole seconds
+rounded down, with a plus.
+
+A room's Time Formatting and Overtime settings (Room Settings: the countdown
+format, the overtime prefix, stopping or hiding at 0:00) are not in the API, so
+bdstage always draws the defaults. The prefix defaults to Plus (`+0:01`), the
+other choice being Minus. bdstage drew a minus until 2026-11-11, when
+LivePremier Plus's port of this client met a real room for the first time: the
+room drew `+0:10` where the port drew `-0:10`. That room's `room` event carried
+only the ten documented fields (`_id`, `_model`, `_updated_at`, `name`,
+`blackout`, `focus_message`, `on_air`, `logo`, `timezone`, `date`), and
+`playback_status`, `current_timer` and `next_timer` only documented ones, so
+nothing a client receives says how the room is set. The room's big display
+floors the overtime to whole seconds, as bdstage does; its small tenths readout
+runs about a second ahead and is not the one to match.
 
 The real-time feed is Socket.IO v4 at `/v1/socket.io`. The polling handshake
 answered `0{"sid":…,"upgrades":["websocket"],"pingInterval":25000,"pingTimeout":20000,"maxPayload":1000000}`.
@@ -32,9 +46,9 @@ Seen from the real server, with a made-up room and key:
 | HTTP, wrong key in the header | `400 {"ok":false,"message":"authorization: Not a valid Bearer token"}` — so a 400 has to count as *refused*; the first version only did that when the message said "key" |
 | Socket, made-up room | `44{"message":"Access Denied: Room not found"}` |
 
-Not yet seen, because there is no real room to read: the events' payloads, what
-the socket says to a real room with a wrong key, the room ID format, and these
-specifically —
+Not yet seen, because bdstage itself has not read a real room (the port above
+has, so the payloads' fields are known): what the socket says to a real room
+with a wrong key, the room ID format, and these specifically —
 
 - **`focus` on a message.** Not in the documented message object. `show_message`
   takes `focus=true` and the Viewer then shows the message full screen, so
@@ -103,6 +117,9 @@ specifically —
   gone. The unit's `ExecStopPost` body run by hand: nothing without
   `/run/bdstage-took-display`; with it, `reset-failed` then `--no-block start
   BirdDogRunner`, and the marker removed.
+- 2026-11-11, laptop: overtime drawn with a plus, not a minus
+  (`TestFormatCountdown`, which also pins it rounding down); `build.sh` and
+  `dist/` rebuilt. Not on a PLAY, and not against a real room.
 
 ## On a PLAY
 

@@ -50,13 +50,17 @@ GStreamer's `kmssink` once the PLAY's own decoder has handed the display over.
 | **Clock** — the time of day in the room's time zone | ![](docs/img/clock.png) |
 
 Also: the timer turns yellow and red at the timer's own wrap-up thresholds and
-counts overtime with a minus sign; **Flash** inverts the screen; **Blackout**
+counts overtime with a plus sign; **Flash** inverts the screen; **Blackout**
 blanks it; **On Air** shows a badge; paused timers dim and say so. Every screen
 can be mirrored for a teleprompter.
 
 Not drawn: the room's logo and Stagetimer's custom fonts and colours. Stagetimer's
 exact look would need its own Viewer page in a browser on the PLAY — a much
 heavier thing than this, and not something this module does.
+
+A room's Time Formatting and Overtime settings are not in Stagetimer's API, so
+bdstage always draws the defaults: overtime counts on past 0:00 with a plus,
+whatever the room is set to.
 
 ## Install
 
