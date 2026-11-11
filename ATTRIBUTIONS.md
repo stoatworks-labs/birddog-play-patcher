@@ -60,6 +60,16 @@ A Go module dependency of the on-device agent.
 
 Calls into a C shared library from Go without cgo, which is how the agent dlopens whatever libndi the device already has instead of linking against a redistributable copy.
 
+### Noto Sans
+
+<https://github.com/notofonts/latin-greek-cyrillic>  
+Licence: SIL Open Font License 1.1  
+Copyright: The Noto Project Authors (Copyright 2022)
+
+Regular and Bold, complete and unmodified (not subset), committed with OFL.txt beside them and compiled into a Go program with //go:embed, so they reach the user inside that program's binary rather than as font files. The binary is placed in the package the user downloads with OFL.txt next to it, so the copyright notice and the licence travel with the fonts.
+
+Text a program draws onto a video frame itself, at any size and in Latin, Greek or Cyrillic, with no font to install on the device. The OFL allows the fonts to be bundled with any software, provided each copy carries the notice and the licence and the fonts are never sold on their own.
+
 ### The npm ecosystem
 
 <https://www.npmjs.com>  
