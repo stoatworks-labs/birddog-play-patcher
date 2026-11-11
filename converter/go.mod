@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/datarhei/gosrt v0.13.0
-	github.com/ebitengine/purego v0.11.2
+	github.com/ebitengine/purego v0.11.3
 )
 
 require (
