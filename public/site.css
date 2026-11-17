@@ -21,8 +21,6 @@ h1 { font-size: 1.5rem; margin: 0 0 .25rem; letter-spacing: -.01em; }
 /* Restated: the pages' own unlayered h1 rule would beat the theme's brand. */
 .top .sw-brand { white-space: normal; min-width: 0; font-size: 1.05rem; margin: 0; letter-spacing: .02em; }
 .top a.sw-brand { color: var(--sw-navy-ink); text-decoration: none; }
-/* Restated: the pages' own unlayered `a` colour would beat the theme's bar button. */
-.top .about { display: inline-block; font-size: .9rem; line-height: 1.5; text-decoration: none; color: var(--sw-navy-ink); }
 .top .sub { color: var(--sw-navy-ink-2); margin: 12px 0 0; max-width: 40em; }
 .top .sub a { color: var(--sw-accent-soft); }
 .top .sub code { background: var(--sw-navy-tint); color: var(--sw-navy-ink); }
