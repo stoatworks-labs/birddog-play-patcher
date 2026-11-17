@@ -38,6 +38,8 @@ const SHELL = [
   '/fw.js',
   '/site.css',
   '/support-footer.js',
+  '/about.js',
+  '/about-data.js',
 ];
 
 self.addEventListener('install', (event) => {
