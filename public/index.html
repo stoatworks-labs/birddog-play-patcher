@@ -17,20 +17,29 @@
 <meta property="og:image:height" content="720">
 <meta property="og:image:alt" content="BirdDog PLAY Patcher">
 <meta name="twitter:card" content="summary_large_image">
+<!-- The shared Stoatworks theme. Vendored from stoatworks-backend/theme by scripts/sync-theme.sh: never edit here. -->
+<link rel="stylesheet" href="/stoatworks-theme.css">
 <link rel="stylesheet" href="site.css">
   <link rel="manifest" href="/manifest.webmanifest" />
   <!-- iOS ignores the manifest's icons entirely and wants a PNG of its own. -->
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-  <!-- Tints the status bar and the title bar once installed. -->
-  <meta name="theme-color" content="#fbfaf8" />
+  <!-- Tints the status bar and the title bar once installed: the navy of the band at the top. -->
+  <meta name="theme-color" content="#0e2942" />
 </head>
 <body>
+<header class="sw-bar top">
+  <div class="top-inner">
+    <div class="brand-row">
+      <h1 class="sw-brand"><span class="sw-mark" aria-hidden="true">⊕</span> BirdDog PLAY firmware package generator</h1>
+      <a class="sw-btn about" data-stoatworks-about href="https://stoatworks-labs.com/web-tools/birddog-play-patcher/" target="_blank" rel="noopener">About</a>
+    </div>
+    <p class="sub">Builds an installable <code>.fw</code> carrying an SSH key, Tailscale, an
+       NDI KVM endpoint, a USB media player, a UVC converter, a streaming gateway — and any
+       <a href="modules.html">modules of your own</a>. Everything is assembled in this browser —
+       nothing is uploaded, and no existing firmware file is needed.</p>
+  </div>
+</header>
 <main>
-  <h1>BirdDog PLAY firmware package generator</h1>
-  <p class="sub">Builds an installable <code>.fw</code> carrying an SSH key, Tailscale, an
-     NDI KVM endpoint, a USB media player, a UVC converter, a streaming gateway — and any
-     <a href="modules.html">modules of your own</a>. Everything is assembled in this browser —
-     nothing is uploaded, and no existing firmware file is needed.</p>
 
   <div class="banner">
     <p><strong>Read this first.</strong> This package has been installed on a real PLAY: SSH,
